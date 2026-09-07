@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技術科 教材ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   構成メモ（保守担当者向け）
+   ------------------------------------------------------------
+   このページは gijutsu-lab リポジトリのトップページです。
+   単元（教材）を1つ追加するたびに、下の UNITS 配列に1件追記すれば
+   自動でカードが増えます。デザインは各単元フォルダの教材（例:
+   /gear-ratio/index.html）と同じ配色・書体（ブループリント風）に
+   揃えています。新しい単元を作るときもこのトーンを踏襲してください。
+
+   新しい単元の追加手順:
+   1. このリポジトリ直下に、単元名のフォルダ（ローマ字スラッグ）を作る
+      例: /electricity-basics/
+   2. そのフォルダの中に index.html として教材を1ファイルで置く
+      （外部サーバー・ビルド不要、単一HTMLで完結させる方針）
+   3. 下の UNITS 配列に { title, slug, desc, tags } を1件追記する
+   詳しくは README.md も参照してください。
+   ============================================================ */
+
+:root{
+  --paper: #F1EFE6;
+  --paper-line: #D8D3BF;
+  --ink: #1C2B39;
+  --ink-soft: #4B5A66;
+  --brass: #B8752E;
+  --brass-dark: #8C5A22;
+  --steel: #5C7A8A;
+  --panel: #FFFFFF;
+  --line: #C9C2AA;
+  --font-head: 'Zen Kaku Gothic New', sans-serif;
+  --font-body: 'Noto Sans JP', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:
+    linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.7;
+}
+
+header.top{
+  padding: 40px 24px 28px;
+  border-bottom: 2px solid var(--ink);
+  max-width: 960px;
+  margin: 0 auto;
+}
+header.top .eyebrow{
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--brass-dark);
+  border: 1.5px solid var(--brass);
+  display: inline-block;
+  padding: 2px 8px;
+  margin-bottom: 12px;
+}
+header.top h1{
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(24px, 4vw, 34px);
+  margin: 0 0 8px;
+}
+header.top p{
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 60ch;
+}
+
+main{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 36px 24px 80px;
+}
+
+.unit-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+.unit-card{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s, transform .15s;
+}
+.unit-card:hover{
+  border-color: var(--brass);
+  transform: translateY(-2px);
+}
+.unit-card .num{
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--brass);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.unit-card h2{
+  font-family: var(--font-head);
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.unit-card p{
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+  flex-grow: 1;
+}
+.unit-card .tags{
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.unit-card .tags span{
+  font-size: 11px;
+  color: var(--steel);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+}
+.unit-card .open{
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.empty-note{
+  border: 1.5px dashed var(--line);
+  padding: 20px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+footer.note{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">gijutsu-lab</span>
+  <h1>技術科 教材ラボ</h1>
+  <p>中学校技術科の授業で使う、生徒が直接ブラウザで開ける学習教材の一覧です。単元ごとにフォルダを分け、それぞれ1つのHTMLファイルで完結しています。</p>
+</header>
+
+<main>
+  <div class="unit-grid" id="unitGrid"></div>
+  <div class="empty-note" id="emptyNote" style="display:none;">
+    まだ公開されている単元がありません。
+  </div>
+</main>
+
+<footer class="note">
+  このサイトはGitHub Pagesで公開されています。各教材はアカウント登録やアプリのインストールなしで、リンクを開くだけで利用できます。
+</footer>
+
+<script>
+/* ============================================================
+   単元一覧データ
+   新しい単元を追加するときは、この配列に1件追記するだけでよい。
+   slug は単元フォルダ名（例: /gear-ratio/ の場合は 'gear-ratio'）。
+   ============================================================ */
+const UNITS = [
+  {
+    slug: 'gear-ratio',
+    title: '回転運動を伝える仕組み',
+    desc: 'ギアの種類と摩擦車、速度伝達比の求め方を、自転車の例とシミュレーターで学ぶ教材。',
+    tags: ['エネルギー変換の技術', '歯車']
+  },
+  // 新しい単元はここに { slug, title, desc, tags } を追記していく
+];
+
+const grid = document.getElementById('unitGrid');
+const emptyNote = document.getElementById('emptyNote');
+
+if (UNITS.length === 0) {
+  emptyNote.style.display = 'block';
+} else {
+  UNITS.forEach((u, i) => {
+    const a = document.createElement('a');
+    a.className = 'unit-card';
+    a.href = `./${u.slug}/`;
+    const num = String(i + 1).padStart(2, '0');
+    a.innerHTML = `
+      <span class="num">単元 ${num}</span>
+      <h2>${u.title}</h2>
+      <p>${u.desc}</p>
+      <div class="tags">${(u.tags || []).map(t => `<span>${t}</span>`).join('')}</div>
+      <span class="open">教材を開く</span>
+    `;
+    grid.appendChild(a);
+  });
+}
+</script>
+</body>
+</html>

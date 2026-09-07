@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回転運動を伝える仕組み</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+/* ============================================================
+   構成メモ（保守担当者向け）
+   ------------------------------------------------------------
+   このファイルは1枚のHTMLで完結する教材アプリです。外部サーバーや
+   ログインは不要で、ブラウザで開くだけで動作します（教室のPC共有
+   環境でもそのまま利用可）。
+
+   構造:
+   1. <style>   … 配色・タイポグラフィのCSS変数（:root）とレイアウト
+   2. <body>    … 左ナビ(01〜05)＋各セクション(section#s01〜s05)
+   3. <script>  … ギア計算ロジック(calcRatio)とSVGアニメーション、
+                   クイズ判定、学習ログのJSONバックアップ書き出し
+
+   歯車の種類カードを追加/変更したい場合は GEAR_TYPES 配列を、
+   クイズ問題を変更したい場合は QUIZ 配列を編集してください。
+   計算式を変える必要が生じた場合は calcRatio() のみを直せば
+   画面表示・アニメーション両方に反映されます。
+   ============================================================ */
+
+:root{
+  --paper: #F1EFE6;
+  --paper-line: #D8D3BF;
+  --ink: #1C2B39;
+  --ink-soft: #4B5A66;
+  --brass: #B8752E;
+  --brass-dark: #8C5A22;
+  --steel: #5C7A8A;
+  --yellow: #F2B705;
+  --yellow-ink: #4a3800;
+  --panel: #FFFFFF;
+  --line: #C9C2AA;
+  --radius: 3px;
+  --font-head: 'Zen Kaku Gothic New', sans-serif;
+  --font-body: 'Noto Sans JP', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:
+    linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+.mono{ font-family: var(--font-mono); }
+
+/* ---------- 分数表示（速度伝達比の式） ---------- */
+.frac{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  margin: 0 6px;
+  line-height: 1.25;
+}
+.frac .num{ border-bottom: 1.5px solid currentColor; padding: 0 6px 1px; }
+.frac .den{ padding: 1px 6px 0; }
+
+/* ---------- header ---------- */
+header.top{
+  padding: 22px 24px 18px;
+  border-bottom: 2px solid var(--ink);
+  background: var(--paper);
+  position: relative;
+}
+header.top h1{
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(22px, 3.4vw, 32px);
+  margin: 0 0 4px;
+  letter-spacing: 0.01em;
+}
+header.top p.sub{
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+}
+
+/* ---------- layout ---------- */
+.layout{
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+nav.steps{
+  border-right: 2px solid var(--ink);
+  padding: 20px 0;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+}
+nav.steps a{
+  display: block;
+  padding: 12px 18px;
+  text-decoration: none;
+  color: var(--ink-soft);
+  border-left: 4px solid transparent;
+  font-size: 14px;
+  transition: border-color .15s, color .15s, background .15s;
+}
+nav.steps a:hover{ background: rgba(184,117,46,0.08); }
+nav.steps a.active{
+  color: var(--ink);
+  border-left-color: var(--brass);
+  background: rgba(184,117,46,0.1);
+  font-weight: 700;
+}
+nav.steps a .num{
+  font-family: var(--font-mono);
+  color: var(--brass);
+  margin-right: 8px;
+  font-weight: 700;
+}
+nav.steps a .desc{
+  display:block;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+  margin-left: 30px;
+}
+
+main{ padding: 8px 40px 100px; min-width:0; }
+
+section.step{
+  padding: 46px 0 20px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 20px;
+}
+section.step:last-of-type{ border-bottom: none; }
+
+.step-head{
+  display:flex; align-items: baseline; gap: 14px; margin-bottom: 6px;
+}
+.step-head .num{
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--brass);
+  font-weight: 700;
+  border: 1.5px solid var(--brass);
+  padding: 2px 8px;
+}
+.step-head h2{
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 23px;
+  margin: 0;
+}
+.step-head h2{
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 23px;
+  margin: 0;
+}
+.step-lead{ color: var(--ink-soft); margin: 6px 0 26px; max-width: 62ch; }
+
+/* ---------- concept explainer（トルク・回転速度など） ---------- */
+.concept-block{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 22px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.concept-diagram svg{ width: 100%; height: auto; }
+.concept-text h3{
+  font-family: var(--font-head);
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.concept-text p{
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  margin: 0 0 10px;
+  max-width: 60ch;
+}
+.concept-text p.formula{
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brass-dark);
+  background: #FBF3E1;
+  border: 1px dashed var(--brass);
+  display: inline-block;
+  padding: 6px 14px;
+  margin: 2px 0 12px;
+}
+@media (max-width: 640px){
+  .concept-block{ grid-template-columns: 1fr; }
+  .concept-diagram{ max-width: 160px; margin: 0 auto; }
+}
+
+/* ---------- gear type cards ---------- */
+.gear-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.gear-card{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 16px;
+}
+.gear-card .gear3d-viewport{
+  width: 100%; height: 130px; margin-bottom: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.gear-card .gear3d-viewport canvas{ display:block; }
+.gear-card .gear3d-viewport .drag-hint{
+  position:absolute; bottom:4px; right:6px;
+  font-size: 10px; color: var(--ink-soft); opacity: .6;
+  pointer-events:none;
+}
+.gear-card h3{
+  font-family: var(--font-head);
+  font-size: 15.5px;
+  margin: 0 0 6px;
+}
+.gear-card p{
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* ---------- bicycle diagram ---------- */
+.bike-wrap{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 20px;
+  align-items: center;
+}
+.bike-wrap svg{ width: 100%; height: auto; }
+.bike-facts{ font-size: 14px; }
+.bike-facts .fact{
+  border-left: 3px solid var(--brass);
+  padding: 6px 0 6px 12px;
+  margin-bottom: 12px;
+}
+.bike-facts .fact b{ display:block; font-size: 13px; color: var(--brass-dark); }
+
+@media (max-width: 720px){
+  .bike-wrap{ grid-template-columns: 1fr; }
+}
+
+/* ---------- simulator ---------- */
+.sim{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 24px;
+}
+.sim-mode{
+  display:flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.sim-mode button{
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  cursor: pointer;
+}
+.sim-mode button.active{
+  background: var(--ink);
+  color: var(--paper);
+}
+.sim-grid{
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+}
+@media (max-width: 820px){
+  .sim-grid{ grid-template-columns: 1fr; }
+}
+.sim-stage{
+  background: var(--paper);
+  border: 1px solid var(--line);
+  display:flex; align-items:center; justify-content:center;
+  padding: 10px;
+  min-height: 300px;
+}
+.sim-stage svg{ width: 100%; max-width: 480px; height: auto; }
+
+.sim-controls .slider-block{ margin-bottom: 20px; }
+.fixed-note{
+  font-size: 13px; color: var(--ink-soft); margin: 0 0 12px;
+}
+.gear-presets{
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  margin-bottom: 20px;
+}
+.gear-presets button{
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 9px 2px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  cursor: pointer;
+  text-align: center;
+}
+.gear-presets button.active{
+  background: var(--brass);
+  color: #fff;
+  border-color: var(--brass-dark);
+}
+.gear-presets button .gnum{ display:block; font-size: 14px; }
+.gear-presets button .gteeth{ display:block; font-size: 9.5px; font-weight:500; opacity:.85; margin-top:2px; }
+.sim-controls label{
+  display:flex; justify-content: space-between;
+  font-size: 13.5px; margin-bottom: 6px;
+}
+.sim-controls label .val{
+  font-family: var(--font-mono); font-weight:700; color: var(--brass-dark);
+}
+input[type=range]{
+  width: 100%;
+  accent-color: var(--brass);
+}
+.readout{
+  border-top: 1.5px dashed var(--line);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.readout .row{
+  display:flex; justify-content: space-between; align-items:baseline;
+  font-size: 13.5px; margin-bottom: 10px;
+}
+.readout .row .num{
+  font-family: var(--font-mono); font-size: 17px; font-weight: 700; color: var(--ink);
+}
+.readout .row .num.torque-up{ color: var(--brass-dark); }
+.torque-bars{ display:flex; gap: 4px; align-items: flex-end; height: 34px; }
+.torque-bars .bar{
+  width: 10px; background: var(--brass); transition: height .25s;
+}
+
+.play-btn{
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 14px;
+  border: 1.5px solid var(--ink);
+  background: var(--yellow);
+  color: var(--yellow-ink);
+  cursor: pointer;
+}
+.play-btn:active{ transform: translateY(1px); }
+
+.insight-box{
+  margin-top: 20px;
+  background: #FBF3E1;
+  border: 1.5px solid var(--brass);
+  padding: 14px 16px;
+  font-size: 13.5px;
+}
+.insight-box b{ color: var(--brass-dark); }
+
+/* ---------- quiz ---------- */
+.quiz-item{
+  background: var(--panel);
+  border: 1.5px solid var(--ink);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.quiz-item p.q{ font-weight: 700; margin: 0 0 12px; font-size: 15px; }
+.quiz-item .opts{ display:grid; gap: 8px; }
+.quiz-item button.opt{
+  text-align: left;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  font-family: var(--font-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+.quiz-item button.opt:hover{ border-color: var(--steel); }
+.quiz-item button.opt.correct{
+  border-color: #2E7D32; background: #E8F5E9; font-weight: 700;
+}
+.quiz-item button.opt.wrong{
+  border-color: #B3261E; background: #FCE8E6;
+}
+.quiz-item .explain{
+  margin-top: 10px; font-size: 13px; color: var(--ink-soft);
+  display:none; border-left: 3px solid var(--brass); padding-left: 10px;
+}
+.quiz-item .explain.show{ display:block; }
+
+.score-panel{
+  background: var(--ink);
+  color: var(--paper);
+  padding: 20px;
+  display:flex; align-items:center; justify-content: space-between;
+  flex-wrap: wrap; gap: 14px;
+}
+.score-panel .score{
+  font-family: var(--font-mono);
+  font-size: 26px; font-weight: 700; color: var(--yellow);
+}
+.score-panel .actions{ display:flex; gap: 10px; }
+.score-panel button{
+  padding: 9px 14px;
+  border: 1.5px solid var(--paper);
+  background: transparent;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+}
+.score-panel button:hover{ background: rgba(255,255,255,0.1); }
+
+footer.note{
+  max-width: 62ch;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 20px;
+}
+
+@media (max-width: 900px){
+  .layout{ grid-template-columns: 1fr; }
+  nav.steps{
+    position: sticky; top:0; height: auto;
+    display:flex; overflow-x:auto; border-right:none;
+    border-bottom: 2px solid var(--ink);
+    padding: 8px;
+    z-index: 5;
+    background: var(--paper);
+  }
+  nav.steps a{ border-left:none; border-bottom: 3px solid transparent; white-space: nowrap; padding: 8px 12px;}
+  nav.steps a.active{ border-bottom-color: var(--brass); background:none; }
+  nav.steps a .desc{ display:none; }
+  main{ padding: 8px 18px 80px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>回転運動を伝える仕組み</h1>
+  <p class="sub">中学校技術科｜機械の仕組みとエネルギー変換</p>
+</header>
+
+<div class="layout">
+  <nav class="steps" id="stepNav">
+    <a href="#s01" class="active"><span class="num">01</span>導入<span class="desc">回転力（トルク）とは</span></a>
+    <a href="#s02"><span class="num">02</span>ギアの種類<span class="desc">歯車と摩擦車</span></a>
+    <a href="#s03"><span class="num">03</span>自転車の例<span class="desc">速さと力の関係</span></a>
+    <a href="#s04"><span class="num">04</span>シミュレーター<span class="desc">歯数を変えてみる</span></a>
+    <a href="#s05"><span class="num">05</span>まとめ確認<span class="desc">理解度クイズ</span></a>
+  </nav>
+
+  <main>
+
+    <!-- 01 導入 -->
+    <section class="step" id="s01">
+      <div class="step-head">
+        <span class="num">01</span>
+        <h2>導入：なぜ回転を変換するのか</h2>
+      </div>
+      <p class="step-lead">
+        モーターやペダルが生み出す回転運動は、そのままでは目的の速さ・力になっていません。
+        ギア（歯車）は、回転の「速さ」と「回転力（トルク）」をエネルギーを保ったまま組み替える装置です。
+        歯数の組み合わせによって速さとトルクがどう変化するかを、自転車を例に見ていきます。
+      </p>
+
+      <div class="concept-block">
+        <div class="concept-diagram">
+          <svg viewBox="0 0 200 170" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="30" cy="140" r="7" fill="#1C2B39"/>
+            <line x1="30" y1="140" x2="170" y2="60" stroke="#B8752E" stroke-width="6" stroke-linecap="round"/>
+            <line x1="170" y1="60" x2="170" y2="105" stroke="#1C2B39" stroke-width="3" marker-end="url(#arrow)"/>
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="auto">
+                <path d="M0,0 L8,0 L4,8 Z" fill="#1C2B39"/>
+              </marker>
+            </defs>
+            <text x="95" y="90" font-family="Noto Sans JP" font-size="12" fill="#4B5A66" text-anchor="middle">うでの長さ r</text>
+            <text x="182" y="88" font-family="Noto Sans JP" font-size="12" fill="#1C2B39" font-weight="700">力 F</text>
+            <text x="30" y="160" text-anchor="middle" font-family="Noto Sans JP" font-size="11" fill="#4B5A66">回転の中心</text>
+          </svg>
+        </div>
+        <div class="concept-text">
+          <h3>回転力（トルク）とは</h3>
+          <p>
+            物を回転させようとする力の働きの大きさを「回転力（トルク）」といいます。
+            トルクは、加える力の大きさと、回転の中心から力を加える点までの距離（うでの長さ）が
+            大きいほど大きくなります。
+          </p>
+          <p>
+            ドアノブが軸から離れた場所にあるほど小さな力で開けられるのも、
+            自転車のペダルのクランクが長いほど軽くこげるのも、この「うでの長さ」の効果です。
+          </p>
+          <p>
+            歯車の場合、歯先が力を伝える点にあたるため、<b>半径が大きい歯車ほど、同じ力でも大きなトルクを生み出せます。</b>
+            逆に半径（歯数）が小さい歯車は、トルクは小さくなりますが、その分軸は速く回転します。
+          </p>
+        </div>
+      </div>
+
+      <div class="concept-block">
+        <div class="concept-diagram">
+          <svg viewBox="0 0 200 170" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="100" cy="90" r="55" fill="none" stroke="#5C7A8A" stroke-width="4"/>
+            <circle cx="100" cy="90" r="4" fill="#1C2B39"/>
+            <line x1="100" y1="90" x2="100" y2="35" stroke="#B8752E" stroke-width="5" stroke-linecap="round"/>
+            <path d="M100,35 A55,55 0 0 1 148,63" fill="none" stroke="#1C2B39" stroke-width="2.5" stroke-dasharray="4 3" marker-end="url(#arrow2)"/>
+            <defs>
+              <marker id="arrow2" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="auto">
+                <path d="M0,0 L8,0 L4,8 Z" fill="#1C2B39"/>
+              </marker>
+            </defs>
+            <text x="100" y="150" text-anchor="middle" font-family="JetBrains Mono" font-size="13" font-weight="700" fill="#1C2B39">N rpm</text>
+            <text x="100" y="165" text-anchor="middle" font-family="Noto Sans JP" font-size="10.5" fill="#4B5A66">1分間の回転数</text>
+          </svg>
+        </div>
+        <div class="concept-text">
+          <h3>回転速度（回転数）とは</h3>
+          <p>
+            軸や歯車が「1分間に何回転するか」を表す量を回転速度（回転数）といい、
+            単位には rpm（rotation per minute、回転／分）を使います。60rpmなら1分間に60回転、
+            つまり1秒間に1回転する速さです。
+          </p>
+          <p>
+            かみ合っている2つの歯車は、接触点でのかみ合う速さ（円周方向の速さ）が等しくなるように回転します。
+            そのため<b>歯数が少ない歯車ほど、同じかみ合う速さでもたくさん回転する（rpmが大きくなる）</b>のです。
+            回転を伝えるときエネルギーはほぼ保たれるため、速さ（回転速度）とトルクは常にトレードオフの関係になります。
+          </p>
+        </div>
+      </div>
+
+      <div class="insight-box">
+        <b>この教材のゴール：</b>「歯数の比」＝「速度伝達比」を求められるようになり、歯数の組み合わせで回転速度とトルクがトレードオフの関係にあることを、回転力（トルク）と回転速度（rpm）の考え方から説明できる。
+      </div>
+    </section>
+
+    <!-- 02 ギアの種類 -->
+    <section class="step" id="s02">
+      <div class="step-head">
+        <span class="num">02</span>
+        <h2>ギアの種類と摩擦車</h2>
+      </div>
+      <p class="step-lead">
+        歯車の元になっているのが「摩擦車」です。摩擦車は歯のない2つの円盤を押しつけ合い、接触面の摩擦だけで回転を伝えます。
+        構造が単純で静かに回る一方、大きな力がかかると滑ってしまい、回転数の比が狂うことがあります。
+        歯車は、この接触面に歯を刻んでかみ合わせることで滑りをなくし、大きな力でも正確に速度伝達比を保てるようにした機械要素です。
+        身のまわりの機械には、目的に応じてさまざまな形の歯車（と摩擦車）が使われています。
+      </p>
+      <div class="gear-grid" id="gearGrid"></div>
+      <div class="insight-box">
+        <b>摩擦車と歯車の違い：</b> 摩擦車は接触面の摩擦だけで動力を伝えるため、滑らかで静かですが、大きな力がかかると滑って回転数の比が狂うことがあります。
+        歯車は歯をかみ合わせることで滑りをなくし、摩擦車よりも確実に、正確な速度伝達比で動力を伝えられます。
+      </div>
+    </section>
+
+    <!-- 03 自転車の例 -->
+    <section class="step" id="s03">
+      <div class="step-head">
+        <span class="num">03</span>
+        <h2>自転車で見る「速度伝達比」</h2>
+      </div>
+      <p class="step-lead">
+        自転車はチェーンでつながった2つの歯車（チェーンホイールとスプロケット）で成り立っています。
+        歯どうしが直接かみ合う歯車と同じ考え方で、歯数の比が速さと力を決めています。
+      </p>
+      <div class="bike-wrap">
+        <svg viewBox="0 0 420 240" xmlns="http://www.w3.org/2000/svg">
+          <!-- frame -->
+          <line x1="150" y1="170" x2="230" y2="90" stroke="#1C2B39" stroke-width="4"/>
+          <line x1="150" y1="170" x2="290" y2="170" stroke="#1C2B39" stroke-width="4"/>
+          <line x1="230" y1="90" x2="290" y2="170" stroke="#1C2B39" stroke-width="4"/>
+          <line x1="230" y1="90" x2="330" y2="70" stroke="#1C2B39" stroke-width="4"/>
+          <line x1="330" y1="70" x2="290" y2="170" stroke="#1C2B39" stroke-width="3"/>
+          <!-- wheels -->
+          <circle cx="150" cy="170" r="55" fill="none" stroke="#5C7A8A" stroke-width="3"/>
+          <circle cx="330" cy="170" r="55" fill="none" stroke="#5C7A8A" stroke-width="3"/>
+          <!-- front chainring (driving, large) -->
+          <circle cx="150" cy="170" r="26" fill="none" stroke="#B8752E" stroke-width="8"/>
+          <text x="150" y="175" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#1C2B39">50T</text>
+          <!-- rear sprocket (driven, small) -->
+          <circle cx="290" cy="170" r="12" fill="none" stroke="#B8752E" stroke-width="6"/>
+          <!-- chain -->
+          <line x1="150" y1="144" x2="290" y2="158" stroke="#1C2B39" stroke-width="2.5" stroke-dasharray="3 3"/>
+          <line x1="150" y1="196" x2="290" y2="182" stroke="#1C2B39" stroke-width="2.5" stroke-dasharray="3 3"/>
+          <text x="150" y="120" text-anchor="middle" font-family="Noto Sans JP" font-size="12" fill="#1C2B39" font-weight="700">前ギア（駆動）</text>
+          <text x="290" y="140" text-anchor="middle" font-family="Noto Sans JP" font-size="12" fill="#1C2B39" font-weight="700">後ギア（被動）15T</text>
+          <text x="290" y="215" text-anchor="middle" font-family="Noto Sans JP" font-size="11" fill="#4B5A66">車輪と直結</text>
+        </svg>
+        <div class="bike-facts">
+          <div class="fact">
+            <b>ペダルをこぐ側＝駆動歯車</b>
+            人がペダルを回す力を入れる、前のチェーンホイール。歯数が多いほど1回転あたりチェーンを長く送り出せる。
+          </div>
+          <div class="fact">
+            <b>車輪を回す側＝被動歯車</b>
+            後輪と直結したスプロケット。歯数が少ないほど、同じチェーンの動きでたくさん回転する＝速くなる。
+          </div>
+          <div class="fact">
+            <b>速度伝達比 i = 被動歯車の歯数 ÷ 駆動歯車の歯数 = <span class="frac"><span class="num">被動歯車の歯数</span><span class="den">駆動歯車の歯数</span></span></b>
+            例：前50T・後15T なら i = 15 ÷ 50 = <span class="frac"><span class="num">15</span><span class="den">50</span></span> = 0.3。後輪は前ギアの約3.3倍（1 ÷ 0.3）の速さで回るが、その分ペダルは軽くなる（トルクは0.3倍に減少）。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 シミュレーター -->
+    <section class="step" id="s04">
+      <div class="step-head">
+        <span class="num">04</span>
+        <h2>シミュレーター：歯数を変えてみよう</h2>
+      </div>
+      <p class="step-lead">
+        駆動歯車・被動歯車の歯数をスライダーで変え、速度伝達比・回転速度・トルクがどう変わるか観察しよう。
+      </p>
+
+      <div class="sim">
+        <div class="sim-mode">
+          <button class="active" data-mode="mesh">かみ合いギア（直接かみ合う歯車）</button>
+          <button data-mode="bike">チェーン駆動（自転車）</button>
+        </div>
+
+        <div class="sim-grid">
+          <div class="sim-stage">
+            <svg id="simSvg" viewBox="0 0 480 300" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+
+          <div class="sim-controls">
+            <div id="meshControls">
+              <div class="slider-block">
+                <label>駆動歯車の歯数（Za）<span class="val mono" id="zaVal">30</span></label>
+                <input type="range" id="zaSlider" min="10" max="60" value="30" step="1">
+              </div>
+              <div class="slider-block">
+                <label>被動歯車の歯数（Zb）<span class="val mono" id="zbVal">15</span></label>
+                <input type="range" id="zbSlider" min="10" max="60" value="15" step="1">
+              </div>
+            </div>
+            <div id="bikeControls" style="display:none;">
+              <p class="fixed-note">前ギア（チェーンホイール）は <span class="mono">44T</span> 固定。後ギア（スプロケット）を6段階から選んで、ペダルの重さと速さの変化を比べよう。</p>
+              <div class="gear-presets" id="gearPresets"></div>
+            </div>
+            <div class="slider-block">
+              <label><span id="naLabel">駆動歯車の回転速度</span><span class="val mono" id="naVal">60 rpm</span></label>
+              <input type="range" id="naSlider" min="10" max="120" value="60" step="5">
+            </div>
+
+            <div class="readout">
+              <div class="row">
+                <span>速度伝達比 i = Zb ÷ Za</span>
+                <span class="num mono" id="ratioOut">0.50</span>
+              </div>
+              <div class="row">
+                <span>被動歯車の回転速度</span>
+                <span class="num mono" id="nbOut">120 rpm</span>
+              </div>
+              <div class="row">
+                <span>相対トルク（駆動＝1のとき）</span>
+                <span class="num mono torque-up" id="torqueOut">0.50</span>
+              </div>
+              <div class="torque-bars" id="torqueBars"></div>
+            </div>
+
+            <button class="play-btn" id="playBtn">▶ 回転をシミュレーション</button>
+          </div>
+        </div>
+
+        <div class="insight-box" id="insightBox">
+          歯数を変えて、「速い＝力が弱い」「遅い＝力が強い」の関係を確かめよう。
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 まとめ確認 -->
+    <section class="step" id="s05">
+      <div class="step-head">
+        <span class="num">05</span>
+        <h2>まとめ確認クイズ</h2>
+      </div>
+      <p class="step-lead">今日学んだ内容を4問で確認しよう。</p>
+
+      <div id="quizList"></div>
+
+      <div class="score-panel">
+        <div>
+          得点：<span class="score" id="scoreOut">0 / 4</span>
+        </div>
+        <div class="actions">
+          <button id="resetBtn">クイズをやり直す</button>
+          <button id="exportBtn">結果をバックアップ保存（JSON）</button>
+        </div>
+      </div>
+      <footer class="note">
+        「結果をバックアップ保存」を押すと、解答時刻・得点・選んだ回答をこの端末にファイルとして書き出します（サーバーやアカウント登録は不要）。学習記録の提出や保管に利用してください。
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   歯車の種類データ（カード表示用）
+   追加・変更する場合はこの配列を編集するだけでよい。
+   ============================================================ */
+const GEAR_TYPES = [
+  { name: '摩擦車（フリクションホイール）', desc: '歯のない2つの円盤を押しつけ合い、摩擦だけで回転を伝える。歯車の原型。構造は単純だが、大きな力がかかると滑ってしまう。' },
+  { name: '平歯車（スパーギア）', desc: '軸が平行な2軸間で回転を伝える、もっとも基本的な歯車。時計や自動車のトランスミッションなど。' },
+  { name: 'かさ歯車（ベベルギア）', desc: '交わる軸（多くは直角）の間で回転を伝える、円すい形の歯車。自動車のデフギアなど。' },
+  { name: 'ウォームギア', desc: 'ねじ状のウォームと歯車を組み合わせ、大きな減速比を1段で得られる。逆回転しにくいのも特徴。ギター糸巻きなど。' },
+  { name: 'ラックとピニオン', desc: '丸い歯車（ピニオン）と、まっすぐな歯の板（ラック）を組み合わせ、回転運動を直線運動に変える。自動車のステアリングなど。' },
+  { name: 'チェーンとスプロケット', desc: '歯車どうしを直接かみ合わせず、チェーンでつないで離れた軸に回転を伝える。自転車やオートバイの駆動系。' },
+];
+
+const gearGrid = document.getElementById('gearGrid');
+GEAR_TYPES.forEach((g, i) => {
+  const card = document.createElement('div');
+  card.className = 'gear-card';
+  card.innerHTML = `<div class="gear3d-viewport" id="gear3d-${i}"><span class="drag-hint">3D</span></div><h3>${g.name}</h3><p>${g.desc}</p>`;
+  gearGrid.appendChild(card);
+});
+
+/* ============================================================
+   ギアの種類カード：3Dアニメーション（three.js r128）
+   ------------------------------------------------------------
+   各カードに小さな3Dシーンを1つずつ生成し、CARD_SCENES にまとめて
+   共通のアニメーションループで描画する。歯車の3D形状は
+   makeGearMesh(歯数, 外径, 厚み, 色) で押し出し生成している。
+   実際の機構を厳密に再現するのではなく、中学生が「軸の向き」や
+   「回転の伝わり方」を直感的につかめることを優先した簡略モデル。
+   ============================================================ */
+function gearShape3D(teeth, outerR, rootR, boreR) {
+  const shape = new THREE.Shape();
+  const step = (Math.PI * 2) / teeth;
+  for (let i = 0; i < teeth; i++) {
+    const a0 = i * step;
+    const tipA = a0 + step * 0.18;
+    const tipB = a0 + step * 0.5;
+    const rp = [rootR * Math.cos(a0), rootR * Math.sin(a0)];
+    const t0 = [outerR * Math.cos(tipA), outerR * Math.sin(tipA)];
+    const t1 = [outerR * Math.cos(tipB), outerR * Math.sin(tipB)];
+    if (i === 0) shape.moveTo(rp[0], rp[1]); else shape.lineTo(rp[0], rp[1]);
+    shape.lineTo(t0[0], t0[1]);
+    shape.lineTo(t1[0], t1[1]);
+  }
+  shape.closePath();
+  if (boreR > 0) {
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, boreR, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+  }
+  return shape;
+}
+
+function makeGearMesh(teeth, outerR, thickness, color) {
+  const shape = gearShape3D(teeth, outerR, outerR * 0.72, outerR * 0.24);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thickness, bevelEnabled: true, bevelThickness: thickness * 0.15,
+    bevelSize: thickness * 0.08, bevelSegments: 1, curveSegments: 3
+  });
+  geo.center();
+  const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.35, roughness: 0.5 });
+  return new THREE.Mesh(geo, mat);
+}
+
+const CARD_SCENES = [];
+function initCardScene(container, sceneBuilder) {
+  if (!container) return;
+  const w = container.clientWidth || 200, h = container.clientHeight || 130;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, w / h, 0.1, 100);
+  camera.position.set(0, 0.6, 8.5);
+  camera.lookAt(0, 0, 0);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.85); dl.position.set(3, 4, 5); scene.add(dl);
+  const dl2 = new THREE.DirectionalLight(0xffffff, 0.35); dl2.position.set(-3, -2, -4); scene.add(dl2);
+  const update = sceneBuilder(scene);
+  CARD_SCENES.push({ renderer, scene, camera, update });
+}
+
+function animateCards() {
+  CARD_SCENES.forEach(c => { c.update(); c.renderer.render(c.scene, c.camera); });
+  requestAnimationFrame(animateCards);
+}
+
+function buildFrictionCard(scene) {
+  // 摩擦車：歯のない2枚の円盤を軽く押しつけ合い、接触面の摩擦だけで回転を伝える。
+  // 他のカードと同じ「XY平面の円盤をZ軸方向に押し出し、Z軸まわりに自転させる」
+  // 方式で作ることで、回転軸のねじれ（見た目の破綻）を防いでいる。
+  // 円盤だけだと回転が見た目に分かりにくいため、半径方向の目印バーを子要素として付け、
+  // 大きな負荷がかかると滑る（被動側の速度が落ちる）様子を時おり表現する。
+  function makeDisc(outerR, thickness, color, markColor) {
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness, bevelEnabled: true, bevelThickness: thickness * 0.15,
+      bevelSize: thickness * 0.08, bevelSegments: 1, curveSegments: 32
+    });
+    geo.center();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.6 }));
+    const mark = new THREE.Mesh(
+      new THREE.BoxGeometry(outerR * 0.82, thickness * 1.05, 0.1),
+      new THREE.MeshStandardMaterial({ color: markColor, metalness: 0.2, roughness: 0.6 })
+    );
+    mark.position.set(outerR * 0.41, 0, 0);
+    mesh.add(mark);
+    return mesh;
+  }
+
+  const d1 = makeDisc(1.55, 0.6, 0xB8752E, 0x6b4318);
+  const d2 = makeDisc(1.55, 0.6, 0x5C7A8A, 0x33454f);
+  d1.rotation.x = -0.55; d2.rotation.x = -0.55;
+  d1.position.set(-1.55, 0, 0);
+  d2.position.set(1.55, 0, 0);
+  scene.add(d1, d2);
+
+  let t = 0;
+  return () => {
+    t += 1;
+    const slip = (Math.sin(t * 0.02) > 0.75) ? 0.5 : 1; // ときどき滑って被動側の速度が落ちる様子
+    d1.rotation.z += 0.02;
+    d2.rotation.z -= 0.02 * slip;
+  };
+}
+
+function buildSpurCard(scene) {
+  const gear = makeGearMesh(14, 2.5, 1.1, 0xB8752E);
+  gear.rotation.x = -0.55;
+  scene.add(gear);
+  return () => { gear.rotation.z += 0.018; };
+}
+
+function buildBevelCard(scene) {
+  const g1 = makeGearMesh(12, 1.7, 0.7, 0xB8752E);
+  const g2 = makeGearMesh(12, 1.7, 0.7, 0x5C7A8A);
+  const group1 = new THREE.Group(); group1.add(g1);
+  group1.rotation.set(0.85, 0, 0.35);
+  group1.position.set(-1.0, -0.25, 0.2);
+  const group2 = new THREE.Group(); group2.add(g2);
+  group2.rotation.set(0, 0.95, 0.95);
+  group2.position.set(0.95, 0.35, -0.2);
+  scene.add(group1, group2);
+  return () => { g1.rotation.z += 0.02; g2.rotation.z += 0.02; };
+}
+
+function buildWormCard(scene) {
+  const wormGroup = new THREE.Group();
+  const wormMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 3.0, 18),
+    new THREE.MeshStandardMaterial({ color: 0xB8752E, metalness: 0.4, roughness: 0.4 })
+  );
+  wormMesh.rotation.z = Math.PI / 2;
+  wormGroup.add(wormMesh);
+  const threadMat = new THREE.MeshStandardMaterial({ color: 0x8C5A22, metalness: 0.5, roughness: 0.3 });
+  const turns = 7, segsPerTurn = 8;
+  for (let i = 0; i < turns * segsPerTurn; i++) {
+    const t = i / segsPerTurn;
+    const x = -1.4 + (t / turns) * 2.8;
+    const ang = t * Math.PI * 2;
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.1), threadMat);
+    box.position.set(x, 0.55 * Math.cos(ang), 0.55 * Math.sin(ang));
+    wormGroup.add(box);
+  }
+  scene.add(wormGroup);
+
+  const smallGear = makeGearMesh(10, 1.05, 0.55, 0x5C7A8A);
+  smallGear.position.set(0, -1.5, 0);
+  scene.add(smallGear);
+
+  return () => { wormGroup.rotation.x += 0.09; smallGear.rotation.z += 0.006; };
+}
+
+function buildRackPinionCard(scene) {
+  const rackGroup = new THREE.Group();
+  const bar = new THREE.Mesh(
+    new THREE.BoxGeometry(3.3, 0.35, 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x5C7A8A, metalness: 0.3, roughness: 0.6 })
+  );
+  rackGroup.add(bar);
+  const toothMat = new THREE.MeshStandardMaterial({ color: 0x4B5A66, metalness: 0.3, roughness: 0.6 });
+  for (let i = 0; i < 11; i++) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.5), toothMat);
+    t.position.set(-1.5 + i * 0.3, 0.28, 0);
+    rackGroup.add(t);
+  }
+  rackGroup.position.y = -1.0;
+  scene.add(rackGroup);
+
+  const pinion = makeGearMesh(10, 0.95, 0.55, 0xB8752E);
+  scene.add(pinion);
+
+  let t = 0;
+  return () => {
+    t += 0.022;
+    pinion.position.x = Math.sin(t) * 1.35;
+    pinion.position.y = -0.18;
+    pinion.rotation.z -= 0.045 * Math.cos(t);
+  };
+}
+
+function buildChainSprocketCard(scene) {
+  const big = makeGearMesh(16, 1.5, 0.6, 0xB8752E);
+  const small = makeGearMesh(8, 0.85, 0.6, 0x5C7A8A);
+  big.position.set(-1.1, -0.15, 0);
+  small.position.set(1.1, 0.35, 0);
+  scene.add(big, small);
+  const chainMat = new THREE.MeshStandardMaterial({ color: 0x1C2B39, metalness: 0.2, roughness: 0.7 });
+  const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.07, 0.07), chainMat);
+  topBar.position.set(0.02, 0.85, 0); topBar.rotation.z = 0.12;
+  const botBar = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.07, 0.07), chainMat);
+  botBar.position.set(0.02, -0.55, 0); botBar.rotation.z = 0.12;
+  scene.add(topBar, botBar);
+  return () => { big.rotation.z += 0.014; small.rotation.z += 0.014 * (16 / 8); };
+}
+
+const GEAR_BUILDERS = [buildFrictionCard, buildSpurCard, buildBevelCard, buildWormCard, buildRackPinionCard, buildChainSprocketCard];
+GEAR_TYPES.forEach((g, i) => {
+  initCardScene(document.getElementById(`gear3d-${i}`), GEAR_BUILDERS[i]);
+});
+requestAnimationFrame(animateCards);
+
+/* ============================================================
+   スクロールに応じた左ナビのハイライト
+   ============================================================ */
+const sections = document.querySelectorAll('section.step');
+const navLinks = document.querySelectorAll('#stepNav a');
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`#stepNav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+sections.forEach(s => io.observe(s));
+
+/* ============================================================
+   ギア比計算ロジック（表示計算の唯一の出所）
+   i (速度伝達比) = Zb / Za  ※中学校技術科の標準的な定義：被動歯車の歯数 ÷ 駆動歯車の歯数
+   Nb (被動軸の回転速度) = Na / i
+   Torque比 は i と同じ（Tb = Ta × i、エネルギー保存の簡易モデル、摩擦損失は無視）
+   ============================================================ */
+function calcRatio(za, zb, na) {
+  const ratio = zb / za; // i = 被動歯数 ÷ 駆動歯数 = 駆動軸の回転速度 ÷ 被動軸の回転速度
+  const nb = na / ratio;
+  const torqueB = ratio; // 駆動トルクを1とした時の被動トルク（Tb = Ta × i）
+  return { ratio, nb, torqueB };
+}
+
+/* ============================================================
+   シミュレーター
+   ============================================================ */
+const zaSlider = document.getElementById('zaSlider');
+const zbSlider = document.getElementById('zbSlider');
+const naSlider = document.getElementById('naSlider');
+const zaVal = document.getElementById('zaVal');
+const zbVal = document.getElementById('zbVal');
+const naVal = document.getElementById('naVal');
+const ratioOut = document.getElementById('ratioOut');
+const nbOut = document.getElementById('nbOut');
+const torqueOut = document.getElementById('torqueOut');
+const torqueBars = document.getElementById('torqueBars');
+const insightBox = document.getElementById('insightBox');
+const simSvg = document.getElementById('simSvg');
+const playBtn = document.getElementById('playBtn');
+const modeButtons = document.querySelectorAll('.sim-mode button');
+const meshControls = document.getElementById('meshControls');
+const bikeControls = document.getElementById('bikeControls');
+const gearPresetsEl = document.getElementById('gearPresets');
+const naLabel = document.getElementById('naLabel');
+
+/* 自転車の実車に近い6段変速の例（前ギアは1枚固定、後ろのスプロケットのみ変える構成） */
+const BIKE_FRONT_TEETH = 44;
+const BIKE_GEARS = [
+  { gear: 1, zb: 28 }, { gear: 2, zb: 24 }, { gear: 3, zb: 21 },
+  { gear: 4, zb: 18 }, { gear: 5, zb: 16 }, { gear: 6, zb: 14 },
+];
+let selectedBikeGear = 3;
+
+function renderGearPresets() {
+  gearPresetsEl.innerHTML = '';
+  BIKE_GEARS.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = g.gear === selectedBikeGear ? 'active' : '';
+    btn.innerHTML = `<span class="gnum">${g.gear}</span><span class="gteeth">${g.zb}T</span>`;
+    btn.addEventListener('click', () => {
+      selectedBikeGear = g.gear;
+      zaSlider.value = BIKE_FRONT_TEETH;
+      zbSlider.value = g.zb;
+      renderGearPresets();
+      updateSim();
+    });
+    gearPresetsEl.appendChild(btn);
+  });
+}
+renderGearPresets();
+
+let mode = 'mesh';
+let angle = 0;
+let playing = false;
+let rafId = null;
+
+function gearPath(cx, cy, r, teeth, rot) {
+  // シンプルな歯車形状（歯先/歯底の交互半径で歯を表現）
+  const toothR = r * 1.12;
+  const rootR = r * 0.92;
+  let d = '';
+  const step = (Math.PI * 2) / teeth;
+  for (let i = 0; i < teeth; i++) {
+    const a0 = i * step + rot;
+    const a1 = a0 + step * 0.5;
+    const x0 = cx + toothR * Math.cos(a0), y0 = cy + toothR * Math.sin(a0);
+    const x1 = cx + rootR * Math.cos(a0 + step * 0.15), y1 = cy + rootR * Math.sin(a0 + step * 0.15);
+    const x2 = cx + rootR * Math.cos(a1 - step * 0.15), y2 = cy + rootR * Math.sin(a1 - step * 0.15);
+    const x3 = cx + toothR * Math.cos(a1), y3 = cy + toothR * Math.sin(a1);
+    d += `${i===0?'M':'L'}${x0},${y0} L${x1},${y1} L${x2},${y2} L${x3},${y3} `;
+  }
+  d += 'Z';
+  return d;
+}
+
+function renderMesh(za, zb, rotA) {
+  const rA = 30 + za * 1.6;
+  const rB = 30 + zb * 1.6;
+  const cxA = 480/2 - (rA + rB) / 2 - 4;
+  const cxB = cxA + rA + rB + 8 + (rA*0.02);
+  const cy = 150;
+  const rotB = -rotA * (za / zb) + Math.PI / zb; // 反対向きに回転、歯がかみ合うよう位相調整
+  return `
+    <text x="${cxA}" y="${cy-rA-22}" text-anchor="middle" font-family="Noto Sans JP" font-size="13" font-weight="700" fill="#1C2B39">駆動 Za=${za}</text>
+    <text x="${cxB}" y="${cy-rB-22}" text-anchor="middle" font-family="Noto Sans JP" font-size="13" font-weight="700" fill="#1C2B39">被動 Zb=${zb}</text>
+    <path d="${gearPath(cxA, cy, rA, za, rotA)}" fill="#FBF3E1" stroke="#B8752E" stroke-width="3"/>
+    <circle cx="${cxA}" cy="${cy}" r="6" fill="#1C2B39"/>
+    <path d="${gearPath(cxB, cy, rB, zb, rotB)}" fill="#FBF3E1" stroke="#5C7A8A" stroke-width="3"/>
+    <circle cx="${cxB}" cy="${cy}" r="6" fill="#1C2B39"/>
+  `;
+}
+
+function renderBike(za, zb, rotA) {
+  // ペダル側（駆動＝チェーンホイール）を右、後輪スプロケット（被動）を左に配置。
+  // 薄い自転車フォルム（フレーム・前輪・サドル・ハンドル）を背景にうっすら描き、
+  // 自転車全体の中でどこが動いているかが分かるようにしている。
+  const cy = 195;
+  const rearCx = 105;   // 被動（後輪スプロケット）
+  const pedalCx = 250;  // 駆動（チェーンホイール／ペダル）
+  const frontWheelCx = 400; // 前輪（ギアなし、飾りのシルエット）
+  const seatX = 195, seatY = 95;
+  const headX = 335, headY = 88;
+
+  const rA = 14 + za * 0.85; // ペダル側ギア半径
+  const rB = 14 + zb * 0.85; // 後輪スプロケット半径
+  const rotB = rotA * (za / zb); // チェーンでつながるので同じ向きに回転
+
+  const silhouette = `
+    <circle cx="${rearCx}" cy="${cy}" r="62" fill="none" stroke="#5C7A8A" stroke-width="2.5" opacity="0.3"/>
+    <circle cx="${frontWheelCx}" cy="${cy}" r="62" fill="none" stroke="#5C7A8A" stroke-width="2.5" opacity="0.3"/>
+    <line x1="${rearCx}" y1="${cy}" x2="${seatX}" y2="${seatY}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${seatX}" y1="${seatY}" x2="${pedalCx}" y2="${cy}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${rearCx}" y1="${cy}" x2="${pedalCx}" y2="${cy}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${pedalCx}" y1="${cy}" x2="${headX}" y2="${headY}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${seatX}" y1="${seatY}" x2="${headX}" y2="${headY}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${headX}" y1="${headY}" x2="${frontWheelCx}" y2="${cy}" stroke="#5C7A8A" stroke-width="3" opacity="0.3"/>
+    <line x1="${seatX-14}" y1="${seatY-6}" x2="${seatX+16}" y2="${seatY-6}" stroke="#5C7A8A" stroke-width="4" opacity="0.3" stroke-linecap="round"/>
+    <line x1="${headX-16}" y1="${headY-14}" x2="${headX+14}" y2="${headY-10}" stroke="#5C7A8A" stroke-width="4" opacity="0.3" stroke-linecap="round"/>
+  `;
+
+  const chain = `
+    <line x1="${rearCx}" y1="${cy-rB*0.85}" x2="${pedalCx}" y2="${cy-rA*0.85}" stroke="#1C2B39" stroke-width="2" stroke-dasharray="4 3"/>
+    <line x1="${rearCx}" y1="${cy+rB*0.85}" x2="${pedalCx}" y2="${cy+rA*0.85}" stroke="#1C2B39" stroke-width="2" stroke-dasharray="4 3"/>
+  `;
+
+  return `
+    ${silhouette}
+    ${chain}
+    <text x="${rearCx}" y="${cy-rB-16}" text-anchor="middle" font-family="Noto Sans JP" font-size="12.5" font-weight="700" fill="#1C2B39">後ギア（被動）Zb=${zb}</text>
+    <text x="${pedalCx}" y="${cy-rA-16}" text-anchor="middle" font-family="Noto Sans JP" font-size="12.5" font-weight="700" fill="#1C2B39">ペダル側（駆動）Za=${za}</text>
+    <path d="${gearPath(rearCx, cy, rB, Math.max(zb,8), rotB)}" fill="#FBF3E1" stroke="#5C7A8A" stroke-width="3"/>
+    <circle cx="${rearCx}" cy="${cy}" r="5" fill="#1C2B39"/>
+    <path d="${gearPath(pedalCx, cy, rA, Math.max(za,8), rotA)}" fill="#FBF3E1" stroke="#B8752E" stroke-width="3"/>
+    <circle cx="${pedalCx}" cy="${cy}" r="5" fill="#1C2B39"/>
+    <text x="${frontWheelCx}" y="${cy+80}" text-anchor="middle" font-family="Noto Sans JP" font-size="11" fill="#4B5A66" opacity="0.6">前輪（駆動しない）</text>
+  `;
+}
+
+function updateSim() {
+  const za = parseInt(zaSlider.value);
+  const zb = parseInt(zbSlider.value);
+  const na = parseInt(naSlider.value);
+  zaVal.textContent = za;
+  zbVal.textContent = zb;
+  naVal.textContent = na + ' rpm';
+
+  const { ratio, nb, torqueB } = calcRatio(za, zb, na);
+  ratioOut.textContent = ratio.toFixed(2);
+  nbOut.textContent = nb.toFixed(1) + ' rpm';
+  torqueOut.textContent = torqueB.toFixed(2);
+
+  // トルクバー（相対値を視覚化、最大10本）
+  torqueBars.innerHTML = '';
+  const bars = Math.max(1, Math.min(10, Math.round(torqueB * 5)));
+  for (let i = 0; i < 10; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = i < bars ? `${8 + i*2.6}px` : '4px';
+    bar.style.opacity = i < bars ? '1' : '0.15';
+    torqueBars.appendChild(bar);
+  }
+
+  const bikeNote = mode === 'bike' ? `（自転車のギア${selectedBikeGear}）` : '';
+  if (ratio < 0.95) {
+    insightBox.innerHTML = `<b>速さ優先の組み合わせ${bikeNote}：</b> 被動歯車が駆動より速く回る一方、トルクは ${torqueB.toFixed(2)} 倍に減少。自転車なら「平地でスピードを出す」ギア。`;
+  } else if (ratio > 1.05) {
+    insightBox.innerHTML = `<b>力（トルク）優先の組み合わせ${bikeNote}：</b> 被動歯車はゆっくり回る一方、トルクは ${torqueB.toFixed(2)} 倍に増加。自転車なら「坂道を軽い力でこぐ」ギア。`;
+  } else {
+    insightBox.innerHTML = `<b>ほぼ1:1の組み合わせ${bikeNote}：</b> 速さもトルクも駆動歯車とほとんど変わらない。`;
+  }
+
+  simSvg.innerHTML = mode === 'mesh' ? renderMesh(za, zb, angle) : renderBike(za, zb, angle);
+}
+
+modeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    modeButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    if (mode === 'bike') {
+      meshControls.style.display = 'none';
+      bikeControls.style.display = 'block';
+      naLabel.textContent = 'ペダルを踏む速さ（ケイデンス）';
+      zaSlider.value = BIKE_FRONT_TEETH;
+      zbSlider.value = BIKE_GEARS.find(g => g.gear === selectedBikeGear).zb;
+    } else {
+      meshControls.style.display = 'block';
+      bikeControls.style.display = 'none';
+      naLabel.textContent = '駆動歯車の回転速度';
+      zaSlider.value = 30;
+      zbSlider.value = 15;
+    }
+    updateSim();
+  });
+});
+
+[zaSlider, zbSlider, naSlider].forEach(s => s.addEventListener('input', updateSim));
+
+function animate() {
+  const za = parseInt(zaSlider.value);
+  const na = parseInt(naSlider.value);
+  angle += (na / 60) * 0.05; // 回転速度に応じて角度を進める（見た目のための簡易換算）
+  updateSim();
+  rafId = requestAnimationFrame(animate);
+}
+
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  if (playing) {
+    playBtn.textContent = '⏸ 停止';
+    animate();
+  } else {
+    playBtn.textContent = '▶ 回転をシミュレーション';
+    cancelAnimationFrame(rafId);
+  }
+});
+
+updateSim();
+
+/* ============================================================
+   クイズ
+   問題を追加・変更する場合はこの配列を編集する。
+   ============================================================ */
+const QUIZ = [
+  {
+    q: '駆動歯車の歯数が40、被動歯車の歯数が20のとき、速度伝達比 i はいくつか。',
+    opts: ['i = 0.5', 'i = 2.0', 'i = 20', 'i = 40'],
+    correct: 0,
+    explain: 'i = Zb ÷ Za = 20 ÷ 40 = 0.5。速度伝達比は「被動歯車の歯数 ÷ 駆動歯車の歯数」で求める（駆動軸の回転速度 ÷ 被動軸の回転速度と同じ値になる）。被動歯車は駆動歯車の2倍の速さで回転する。'
+  },
+  {
+    q: '自転車で坂道を軽い力でこぎたいとき、前ギア（駆動）と後ギア（被動）の歯数の組み合わせとして適切なのはどれか。',
+    opts: ['前の歯数を大きく、後の歯数を小さくする', '前の歯数を小さく、後の歯数を大きくする', '前後の歯数を同じにする', '歯数はトルクに関係しない'],
+    correct: 1,
+    explain: '前を小さく・後を大きくすると速度伝達比 i（＝被動歯数÷駆動歯数）が大きくなり、回転は遅くなるがトルク（力）が大きくなるため、坂道を軽い力でこげる。'
+  },
+  {
+    q: '速度伝達比 i が大きいほど、被動歯車のトルクはどうなるか。',
+    opts: ['大きくなる', '小さくなる', '変わらない', '歯数によって決まらない'],
+    correct: 0,
+    explain: '速度伝達比 i が大きいほど被動軸の回転は遅くなり、その分トルクは i 倍に大きくなる（回転を伝える前後でエネルギーはほぼ保たれるため）。'
+  },
+  {
+    q: '回転する軸どうしが直角に交わる場所で回転を伝えるのに適した歯車はどれか。',
+    opts: ['平歯車', 'かさ歯車', 'ラックとピニオン', 'ウォームギア'],
+    correct: 1,
+    explain: 'かさ歯車（ベベルギア）は円すい形をしており、軸が交わる（多くは直角の）場所で回転を伝えるのに使われる。自動車のデフギアなどが代表例。'
+  },
+];
+
+const quizList = document.getElementById('quizList');
+const scoreOut = document.getElementById('scoreOut');
+let answers = new Array(QUIZ.length).fill(null);
+
+function renderQuiz() {
+  quizList.innerHTML = '';
+  QUIZ.forEach((item, qi) => {
+    const div = document.createElement('div');
+    div.className = 'quiz-item';
+    div.innerHTML = `
+      <p class="q">Q${qi+1}. ${item.q}</p>
+      <div class="opts">
+        ${item.opts.map((opt, oi) => `<button class="opt" data-q="${qi}" data-o="${oi}">${opt}</button>`).join('')}
+      </div>
+      <div class="explain" id="explain-${qi}">${item.explain}</div>
+    `;
+    quizList.appendChild(div);
+  });
+
+  document.querySelectorAll('.quiz-item .opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qi = parseInt(btn.dataset.q);
+      const oi = parseInt(btn.dataset.o);
+      if (answers[qi] !== null) return; // 一度答えたら固定
+      answers[qi] = oi;
+      const buttons = document.querySelectorAll(`.opt[data-q="${qi}"]`);
+      buttons.forEach(b => {
+        const bo = parseInt(b.dataset.o);
+        if (bo === QUIZ[qi].correct) b.classList.add('correct');
+        else if (bo === oi) b.classList.add('wrong');
+      });
+      document.getElementById(`explain-${qi}`).classList.add('show');
+      updateScore();
+    });
+  });
+}
+
+function updateScore() {
+  const score = answers.reduce((acc, a, i) => acc + (a === QUIZ[i].correct ? 1 : 0), 0);
+  scoreOut.textContent = `${score} / ${QUIZ.length}`;
+}
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  answers = new Array(QUIZ.length).fill(null);
+  renderQuiz();
+  updateScore();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const record = {
+    saved_at: new Date().toISOString(),
+    lesson: '回転運動を伝える仕組み',
+    score: `${answers.reduce((acc, a, i) => acc + (a === QUIZ[i].correct ? 1 : 0), 0)} / ${QUIZ.length}`,
+    answers: QUIZ.map((item, i) => ({
+      question: item.q,
+      selected: answers[i] === null ? '未回答' : item.opts[answers[i]],
+      correct: item.opts[item.correct],
+      is_correct: answers[i] === item.correct
+    }))
+  };
+  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gear-ratio-quiz-result_${record.saved_at.slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+renderQuiz();
+updateScore();
+</script>
+</body>
+</html>
