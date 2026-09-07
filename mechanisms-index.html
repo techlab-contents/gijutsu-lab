@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>機械を動かすしくみと工夫</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   構成メモ（保守担当者向け）
+   ------------------------------------------------------------
+   教科書の「8 機械力が動く仕組み」「9 機械の共通部品と保守点検の
+   大切さ」「10 エネルギー変換の技術の工夫を読み取ろう」の3コマ分を
+   50分1コマに圧縮した教材。外部サーバー・ビルド不要の単一HTML。
+
+   構造:
+   1. <style> … 配色・レイアウト（/gear-ratio/ と同じブループリント基調）
+   2. <body>  … 左ナビ(01〜07) + 各セクション(section#s01〜s07)
+   3. <script> … リンク機構・カム機構のリアルタイム幾何計算、
+                  パスカルの原理の計算、保守点検チェックリスト、
+                  まとめクイズ、学習ログのJSONバックアップ書き出し
+
+   内容を差し替えたい場合:
+   - リンク機構の4種類 → LINKAGES 配列
+   - 共通部品カード → PARTS 配列
+   - まとめクイズ → QUIZ 配列
+   ============================================================ */
+
+:root{
+  --paper: #F1EFE6;
+  --paper-line: #D8D3BF;
+  --ink: #1C2B39;
+  --ink-soft: #4B5A66;
+  --brass: #B8752E;
+  --brass-dark: #8C5A22;
+  --steel: #5C7A8A;
+  --yellow: #F2B705;
+  --yellow-ink: #4a3800;
+  --panel: #FFFFFF;
+  --line: #C9C2AA;
+  --font-head: 'Zen Kaku Gothic New', sans-serif;
+  --font-body: 'Noto Sans JP', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:
+    linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0/32px 32px,
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.65;
+  font-size: 16px;
+}
+.mono{ font-family: var(--font-mono); }
+
+header.top{
+  padding: 20px 24px 16px;
+  border-bottom: 2px solid var(--ink);
+}
+header.top h1{
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(20px, 3.2vw, 30px);
+  margin: 0 0 4px;
+}
+header.top p.sub{ margin:0; color: var(--ink-soft); font-size: 14px; }
+
+.layout{
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+nav.steps{
+  border-right: 2px solid var(--ink);
+  padding: 16px 0;
+  position: sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+}
+nav.steps a{
+  display:block; padding: 10px 16px; text-decoration:none;
+  color: var(--ink-soft); border-left: 4px solid transparent; font-size: 13.5px;
+}
+nav.steps a:hover{ background: rgba(184,117,46,0.08); }
+nav.steps a.active{
+  color: var(--ink); border-left-color: var(--brass);
+  background: rgba(184,117,46,0.1); font-weight:700;
+}
+nav.steps a .num{ font-family: var(--font-mono); color: var(--brass); margin-right:6px; font-weight:700; }
+nav.steps a .desc{ display:block; font-size:10.5px; color:var(--ink-soft); margin:2px 0 0 26px; }
+
+main{ padding: 6px 36px 100px; min-width:0; }
+section.step{ padding: 36px 0 16px; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
+section.step:last-of-type{ border-bottom:none; }
+.step-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:6px; }
+.step-head .num{
+  font-family: var(--font-mono); font-size:14px; color:var(--brass); font-weight:700;
+  border:1.5px solid var(--brass); padding:2px 7px;
+}
+.step-head h2{ font-family: var(--font-head); font-weight:700; font-size:21px; margin:0; }
+.step-lead{ color:var(--ink-soft); margin:6px 0 20px; max-width:66ch; font-size:14.5px; }
+
+.insight-box{
+  margin-top:16px; background:#FBF3E1; border:1.5px solid var(--brass);
+  padding:12px 15px; font-size:13px;
+}
+.insight-box b{ color:var(--brass-dark); }
+
+/* ---------- リンク機構カード ---------- */
+.link-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:18px; }
+.link-card{ background:var(--panel); border:1.5px solid var(--ink); padding:16px; }
+.link-card .stage{ background:var(--paper); border:1px solid var(--line); height:260px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
+.link-card .stage svg{ width:100%; height:100%; }
+.link-card h3{ font-family:var(--font-head); font-size:15.5px; margin:0 0 4px; }
+.link-card p{ font-size:12.5px; color:var(--ink-soft); margin:0 0 8px; }
+.link-card .example{
+  font-size:12px; color:var(--brass-dark); background:#FBF3E1; border:1px solid var(--brass);
+  padding:6px 10px; margin:0;
+}
+.link-card .example b{ font-family:var(--font-head); }
+
+/* ---------- 折りたたみセクション（授業で扱わない場合はデフォルト非表示） ---------- */
+details.collapsible{ margin-top:4px; }
+details.collapsible > summary{
+  cursor:pointer; list-style:none; font-family:var(--font-head); font-weight:700;
+  font-size:13.5px; color:var(--brass-dark); border:1.5px solid var(--brass);
+  background:#FBF3E1; padding:10px 14px; display:flex; align-items:center; gap:8px;
+}
+details.collapsible > summary::-webkit-details-marker{ display:none; }
+details.collapsible > summary::before{ content:'▶'; font-size:11px; transition:transform .15s; }
+details.collapsible[open] > summary::before{ content:'▼'; }
+details.collapsible > .collapsible-body{ padding-top:16px; }
+
+/* ---------- 4サイクルエンジン（往復スライダクランク機構の実例） ---------- */
+.engine-card-wrap{ margin-top:16px; }
+.engine-feature{ background:var(--panel); border:1.5px solid var(--ink); padding:20px; }
+.engine-feature .head{ display:flex; align-items:baseline; gap:10px; margin-bottom:4px; flex-wrap:wrap; }
+.engine-feature .head h3{ font-family:var(--font-head); font-size:16px; margin:0; }
+.engine-feature .head .tag{ font-family:var(--font-mono); font-size:11px; color:var(--brass); border:1px solid var(--brass); padding:1px 7px; }
+.engine-feature p.lead{ font-size:13px; color:var(--ink-soft); margin:6px 0 16px; max-width:70ch; }
+.engine-wrap{ display:grid; grid-template-columns:300px 1fr; gap:22px; align-items:start; }
+.engine-wrap svg{ width:100%; height:auto; }
+@media(max-width:680px){ .engine-wrap{ grid-template-columns:1fr; } }
+
+/* ---------- カム機構 ---------- */
+.cam-wrap{ background:var(--panel); border:1.5px solid var(--ink); padding:18px; display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:center; }
+.cam-wrap svg{ width:100%; height:auto; }
+@media(max-width:640px){ .cam-wrap{ grid-template-columns:1fr; } }
+
+/* ---------- パスカルの原理 ---------- */
+.pascal-wrap{ background:var(--panel); border:1.5px solid var(--ink); padding:18px; display:grid; grid-template-columns:1fr 240px; gap:20px; align-items:center; }
+.pascal-wrap svg{ width:100%; height:auto; }
+@media(max-width:700px){ .pascal-wrap{ grid-template-columns:1fr; } }
+.pascal-controls .slider-block{ margin-bottom:14px; }
+.pascal-controls label{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+.pascal-controls label .val{ font-family:var(--font-mono); font-weight:700; color:var(--brass-dark); }
+input[type=range]{ width:100%; accent-color:var(--brass); }
+.pascal-readout{ border-top:1.5px dashed var(--line); margin-top:12px; padding-top:12px; font-size:13px; }
+.pascal-readout .row{ display:flex; justify-content:space-between; margin-bottom:6px; }
+.pascal-readout .num{ font-family:var(--font-mono); font-weight:700; }
+
+/* ---------- 熱エネルギー機械 ---------- */
+.heat-flow{ display:flex; align-items:center; gap:10px; margin: 6px 0 18px; flex-wrap:wrap; }
+.heat-flow .bubble{
+  background:var(--panel); border:1.5px solid var(--ink); padding:10px 18px;
+  font-family:var(--font-head); font-weight:700; font-size:14px;
+}
+.heat-flow .arrow{ color:var(--brass); font-size:18px; }
+.cycle-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.cycle-card{ background:var(--panel); border:1.5px solid var(--ink); padding:12px; text-align:center; }
+.cycle-card .n{ font-family:var(--font-mono); color:var(--brass); font-weight:700; font-size:12px; }
+.cycle-card h4{ font-family:var(--font-head); font-size:13.5px; margin:6px 0 4px; }
+.cycle-card p{ font-size:11.5px; color:var(--ink-soft); margin:0; }
+.cycle-card.active{ border-color:var(--brass); background:#FBF3E1; }
+
+/* ---------- 共通部品カード ---------- */
+.parts-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+.part-card{ background:var(--panel); border:1.5px solid var(--ink); padding:14px; }
+.part-card .icon{ height:70px; display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+.part-card .icon svg{ height:100%; }
+.part-card h3{ font-family:var(--font-head); font-size:14.5px; margin:0 0 4px; }
+.part-card p{ font-size:12px; color:var(--ink-soft); margin:0; }
+
+/* ---------- トレードオフ ---------- */
+/* ---------- クイズ ---------- */
+.quiz-item{ background:var(--panel); border:1.5px solid var(--ink); padding:16px 18px; margin-bottom:14px; }
+.quiz-item p.q{ font-weight:700; margin:0 0 10px; font-size:14px; }
+.quiz-item .opts{ display:grid; gap:7px; }
+.quiz-item button.opt{ text-align:left; padding:9px 11px; border:1.5px solid var(--line); background:var(--paper); font-family:var(--font-body); font-size:13.5px; cursor:pointer; }
+.quiz-item button.opt:hover{ border-color:var(--steel); }
+.quiz-item button.opt.correct{ border-color:#2E7D32; background:#E8F5E9; font-weight:700; }
+.quiz-item button.opt.wrong{ border-color:#B3261E; background:#FCE8E6; }
+.quiz-item .explain{ margin-top:9px; font-size:12.5px; color:var(--ink-soft); display:none; border-left:3px solid var(--brass); padding-left:9px; }
+.quiz-item .explain.show{ display:block; }
+.score-panel{ background:var(--ink); color:var(--paper); padding:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.score-panel .score{ font-family:var(--font-mono); font-size:24px; font-weight:700; color:var(--yellow); }
+.score-panel .actions{ display:flex; gap:9px; }
+.score-panel button{ padding:8px 13px; border:1.5px solid var(--paper); background:transparent; color:var(--paper); font-family:var(--font-body); font-size:12.5px; cursor:pointer; }
+.score-panel button:hover{ background:rgba(255,255,255,0.1); }
+
+footer.note{ max-width:66ch; font-size:11.5px; color:var(--ink-soft); margin-top:16px; }
+
+@media (max-width:900px){
+  .layout{ grid-template-columns:1fr; }
+  nav.steps{ position:sticky; top:0; height:auto; display:flex; overflow-x:auto; border-right:none; border-bottom:2px solid var(--ink); padding:8px; z-index:5; background:var(--paper); }
+  nav.steps a{ border-left:none; border-bottom:3px solid transparent; white-space:nowrap; padding:8px 12px; }
+  nav.steps a.active{ border-bottom-color:var(--brass); background:none; }
+  nav.steps a .desc{ display:none; }
+  main{ padding:6px 16px 80px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>機械を動かすしくみと工夫</h1>
+  <p class="sub">中学校技術科｜エネルギー変換の技術（機構・流体・熱エネルギー／共通部品と保守点検／技術の工夫）</p>
+</header>
+
+<div class="layout">
+  <nav class="steps" id="stepNav">
+    <a href="#s01" class="active"><span class="num">01</span>導入<span class="desc">3つの伝える技術</span></a>
+    <a href="#s02"><span class="num">02</span>リンク機構<span class="desc">4種類の動き</span></a>
+    <a href="#s03"><span class="num">03</span>カム機構<span class="desc">回転→往復直線</span></a>
+    <a href="#s04"><span class="num">04</span>流体を用いた機械<span class="desc">パスカルの原理</span></a>
+    <a href="#s05"><span class="num">05</span>熱エネルギーで動く機械<span class="desc">熱→運動→電気</span></a>
+    <a href="#s06"><span class="num">06</span>共通部品と保守点検<span class="desc">ねじ・ばね・軸受</span></a>
+    <a href="#s07"><span class="num">07</span>技術の工夫とまとめ<span class="desc">トレードオフ・クイズ</span></a>
+  </nav>
+
+  <main>
+
+    <!-- 01 導入 -->
+    <section class="step" id="s01">
+      <div class="step-head"><span class="num">01</span><h2>導入：機械の運動を伝える3つの技術</h2></div>
+      <p class="step-lead">
+        機械は、モーターやエンジンが生み出した運動を、目的の動きに変えながら伝えています。
+        今日は「① 機構（リンク・カム）で動きの形を変える」「② 流体（水・空気・油）で力を伝える」
+        「③ 熱エネルギーで運動をつくる」という3つの技術と、機械を長く安全に使うための共通部品・保守点検、
+        そして技術に込められた工夫（トレードオフ）を、駆け足でまとめて学びます。
+      </p>
+      <div class="insight-box">
+        <b>今日のゴール：</b>リンク機構・カム機構が動きの形をどう変えるかを説明でき、パスカルの原理を使った力の計算ができ、機械の保守点検の必要性と技術のトレードオフの関係を説明できる。
+      </div>
+    </section>
+
+    <!-- 02 リンク機構 -->
+    <section class="step" id="s02">
+      <div class="step-head"><span class="num">02</span><h2>リンク機構</h2></div>
+      <p class="step-lead">
+        棒状のリンクを組み合わせると、回転運動を往復運動や別の回転運動に変えられます。
+        4本のリンクのうち、動かないリンク（固定リンク）をどこにするかで、機構の種類と動きが変わります。
+        それぞれのカードで、実際にリンクが動く様子を確かめましょう。
+      </p>
+      <div class="link-grid" id="linkGrid"></div>
+      <div class="engine-card-wrap" id="engineCardWrap"></div>
+      <div class="insight-box">
+        <b>ポイント：</b>どの機構も4本のリンクからできていますが、最も短いリンクをどこに置き、どこを固定するかによって「回転を続けるところ」と「往復するところ」が変わります。往復スライダクランク機構は、ガソリンエンジンのピストンにそのまま使われています。
+      </div>
+    </section>
+
+    <!-- 03 カム機構 -->
+    <section class="step" id="s03">
+      <div class="step-head"><span class="num">03</span><h2>カム機構</h2></div>
+      <p class="step-lead">
+        カム機構は、いびつな形をした「カム」を回転させることで、上に乗ったロッド（棒）を
+        押し上げたり下げたりする仕組みです。回転運動を往復直線運動に変えることができます。
+      </p>
+      <div class="cam-wrap">
+        <svg id="camSvg" viewBox="0 0 300 330" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="insight-box">
+          <b>身近な例：</b>自動車のエンジンで吸気弁・排気弁を開け閉めするのもカム機構です。カムの形（プロファイル）を変えれば、ロッドが動くタイミングや高さを自由に設計できます。
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 流体を用いた機械 -->
+    <section class="step" id="s04">
+      <div class="step-head"><span class="num">04</span><h2>流体を用いた機械</h2></div>
+      <p class="step-lead">
+        水や空気、油などの流体は、圧力を伝えることで力を伝えたり、力の大きさを変えたりできます。
+      </p>
+      <details class="collapsible">
+        <summary>このセクションを表示する（授業で扱う場合）</summary>
+        <div class="collapsible-body">
+          <p class="step-lead">その基本になっているのが「パスカルの原理」です。</p>
+          <div class="pascal-wrap">
+            <svg id="pascalSvg" viewBox="0 0 480 240" xmlns="http://www.w3.org/2000/svg"></svg>
+            <div class="pascal-controls">
+              <div class="slider-block">
+                <label>おす力 F1<span class="val mono" id="f1Val">10 N</span></label>
+                <input type="range" id="f1Slider" min="2" max="30" value="10" step="1">
+              </div>
+              <div class="slider-block">
+                <label>左の断面積 A1<span class="val mono" id="a1Val">100 mm²</span></label>
+                <input type="range" id="a1Slider" min="50" max="150" value="100" step="5">
+              </div>
+              <div class="slider-block">
+                <label>右の断面積 A2<span class="val mono" id="a2Val">200 mm²</span></label>
+                <input type="range" id="a2Slider" min="50" max="300" value="200" step="5">
+              </div>
+              <div class="pascal-readout">
+                <div class="row"><span>圧力 P = F1 ÷ A1</span><span class="num" id="pOut">0.10 N/mm²</span></div>
+                <div class="row"><span>右で取り出せる力 F2 = P × A2</span><span class="num" id="f2Out">20.0 N</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="insight-box">
+            <b>覚えておこう：</b>断面積を大きくした側では、より大きな力を取り出せます。ただしその分、動く距離は短くなります（力を大きくすると、動く距離は小さくなるトレードオフ）。油圧ショベルはこの原理で、小さな力から大きな力をつくり出しています。
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- 05 熱エネルギーで動く機械 -->
+    <section class="step" id="s05">
+      <div class="step-head"><span class="num">05</span><h2>熱エネルギーで動く機械</h2></div>
+      <p class="step-lead">
+        熱を加えると気体や水蒸気の圧力が高まり、他の物体を動かすことができます。
+        熱機関はこの性質を利用して、熱エネルギーを運動エネルギーに変換しています。
+      </p>
+      <details class="collapsible">
+        <summary>このセクションを表示する（授業で扱う場合）</summary>
+        <div class="collapsible-body">
+          <div class="heat-flow">
+            <span class="bubble">熱</span><span class="arrow">▶</span>
+            <span class="bubble">運動</span><span class="arrow">▶</span>
+            <span class="bubble">電気</span>
+          </div>
+          <p class="step-lead" style="margin-top:-8px;">
+            例えば発電所のコンバインドサイクル発電では、燃料を燃やした熱でガスタービンを回し、
+            その排熱でつくった蒸気で蒸気タービンをさらに回して発電します。
+          </p>
+          <p class="step-lead" style="margin-bottom:0;">
+            自動車のガソリン機関では、ピストンの往復直線運動を、往復スライダクランク機構でクランク軸の
+            回転運動に変えています（実際の動きは「02 リンク機構」で確認できます）。
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <!-- 06 共通部品と保守点検 -->
+    <section class="step" id="s06">
+      <div class="step-head"><span class="num">06</span><h2>機械の共通部品と保守点検</h2></div>
+      <p class="step-lead">
+        機械にはねじやばね、軸受のような部品がよく使われます。これらの形や大きさをJIS・ISOなどの
+        規格で統一しておくことで、どの機械にも同じ部品を使い回すことができ、修理や交換がしやすくなります。
+      </p>
+      <div class="parts-grid" id="partsGrid"></div>
+
+      <p class="step-lead" style="margin-top:22px;">
+        機械は正常な状態を保つために、定期的な保守点検が欠かせません。飛行機のようにメーカーや
+        整備士が点検の責任を持つ機械もあれば、自転車のように使用者自身が日常の点検を行う責任を
+        持つ機械もあります。
+      </p>
+    </section>
+
+    <!-- 07 技術の工夫とまとめ -->
+    <section class="step" id="s07">
+      <div class="step-head"><span class="num">07</span><h2>技術の工夫とまとめクイズ</h2></div>
+      <p class="step-lead">
+        製品を開発するときには、性能・安全性・使いやすさ・省エネルギー性・経済性など、
+        いくつもの条件を同時に満たす必要があります。あちらを立てればこちらが立たない
+        「トレードオフの関係」を、工夫によって折り合わせているのです。
+      </p>
+
+      <p class="step-lead" style="margin-top:22px;">今日学んだ内容を5問で確認しよう。</p>
+      <div id="quizList"></div>
+      <div class="score-panel">
+        <div>得点：<span class="score" id="scoreOut">0 / 5</span></div>
+        <div class="actions">
+          <button id="resetBtn">クイズをやり直す</button>
+          <button id="exportBtn">結果をバックアップ保存（JSON）</button>
+        </div>
+      </div>
+      <footer class="note">
+        「結果をバックアップ保存」を押すと、解答時刻・得点・選んだ回答をこの端末にファイルとして書き出します（サーバーやアカウント登録は不要）。学習記録の提出や保管に利用してください。
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   共通ユーティリティ：円と円の交点を求める
+   （リンク機構の関節位置を求めるために使用）
+   ============================================================ */
+function circleIntersect(c1, r1, c2, r2, upper) {
+  const dx = c2.x - c1.x, dy = c2.y - c1.y;
+  const d = Math.hypot(dx, dy);
+  if (d > r1 + r2 || d < Math.abs(r1 - r2) || d === 0) return null;
+  const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
+  const xm = c1.x + a * dx / d, ym = c1.y + a * dy / d;
+  const p1 = { x: xm + h * dy / d, y: ym - h * dx / d };
+  const p2 = { x: xm - h * dy / d, y: ym + h * dx / d };
+  return upper ? p1 : p2;
+}
+
+/* ============================================================
+   リンク機構：4種類
+   それぞれ独自の joint(t) 関数（時刻tから各関節の座標を返す）を持つ。
+   ============================================================ */
+const CX = 190, CY = 150; // 各カード内の基準原点（拡大版）
+
+function linkageTeko(t) {
+  // てこクランク機構：クランクAが全回転、てこCが揺動
+  // リンク長はグラショフの条件（最短+最長 ≦ 残り2本の和）を満たすように選び、
+  // 全角度で組み立て不能（circleIntersectがnullを返す）にならないようにしている。
+  const O2 = { x: CX - 45, y: CY }, O4 = { x: CX + 45, y: CY };
+  const a = 34, b = 82, c = 77;
+  const theta = t;
+  const A = { x: O2.x + a * Math.cos(theta), y: O2.y + a * Math.sin(theta) };
+  const B = circleIntersect(A, b, O4, c, true);
+  if (!B) return null;
+  return { O2, O4, A, B, labels: { A: 'A(クランク)', B: 'B(連接棒)', C: 'C(てこ)', D: 'D(固定)' } };
+}
+
+function linkageParallel(t) {
+  // 平行クランク機構：A1・A2が同じ角度で回転、コネクタは平行移動
+  const O1 = { x: CX - 80, y: CY }, O2 = { x: CX + 45, y: CY };
+  const a = 41;
+  const theta = t;
+  const A1 = { x: O1.x + a * Math.cos(theta), y: O1.y + a * Math.sin(theta) };
+  const A2 = { x: O2.x + a * Math.cos(theta), y: O2.y + a * Math.sin(theta) };
+  return { O1, O2, A1, A2, labels: { A1: 'A1', A2: 'A2' } };
+}
+
+function linkageDouble(t) {
+  // 両てこ機構：連接棒（コネクタ）が全回転し、両側のリンクが揺動
+  // ここもグラショフの条件を満たす長さに調整済み（連接棒が最短、固定リンクがその対辺）。
+  const O1 = { x: CX - 47, y: CY }, O2 = { x: CX + 47, y: CY };
+  const L1 = 68, coupler = 31, L3 = 68;
+  const psi = t; // コネクタの絶対角度を全周させる
+  const cvec = { x: coupler * Math.cos(psi), y: coupler * Math.sin(psi) };
+  const shifted = { x: O2.x - cvec.x, y: O2.y - cvec.y };
+  const P1 = circleIntersect(O1, L1, shifted, L3, true);
+  if (!P1) return null;
+  const P2 = { x: P1.x + cvec.x, y: P1.y + cvec.y };
+  return { O1, O2, P1, P2, labels: { P1: 'B', P2: 'D' } };
+}
+
+const LINKAGES = [
+  { name: 'てこクランク機構', desc: 'クランクAが回転を続けると、てこCが一定の範囲を揺れ動く。', example: '自動車のフロントガラスのワイパー', fn: linkageTeko, kind: 'teko' },
+  { name: '平行クランク機構', desc: '向かい合うリンクの長さを等しくすると、A1とA2はともに同じ向きに回転する。', example: '観覧車のゴンドラ（常に水平を保つ）', fn: linkageParallel, kind: 'parallel' },
+  { name: '両てこ機構', desc: '最短リンクと向かい合うリンクを固定すると、両側のリンクがともに揺れ動く。', example: '建設機械のアームなど、2か所を同時に動かす機構の一部', fn: linkageDouble, kind: 'double' },
+];
+
+function drawLinkage(svg, kind, data) {
+  if (!data) { svg.innerHTML = ''; return; }
+  const ink = '#1C2B39', brass = '#B8752E', steel = '#5C7A8A', line = '#C9C2AA';
+  let html = '';
+  if (kind === 'teko') {
+    const { O2, O4, A, B } = data;
+    html += `<line x1="${O2.x}" y1="${O2.y}" x2="${O4.x}" y2="${O4.y}" stroke="${line}" stroke-width="7"/>`;
+    html += `<line x1="${O2.x}" y1="${O2.y}" x2="${A.x}" y2="${A.y}" stroke="${brass}" stroke-width="8"/>`;
+    html += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${steel}" stroke-width="8"/>`;
+    html += `<line x1="${O4.x}" y1="${O4.y}" x2="${B.x}" y2="${B.y}" stroke="#8C5A22" stroke-width="8"/>`;
+    [O2, O4, A, B].forEach(p => html += `<circle cx="${p.x}" cy="${p.y}" r="6" fill="${ink}"/>`);
+  } else if (kind === 'parallel') {
+    const { O1, O2, A1, A2 } = data;
+    html += `<line x1="${O1.x}" y1="${O1.y}" x2="${O2.x}" y2="${O2.y}" stroke="${line}" stroke-width="7"/>`;
+    html += `<line x1="${A1.x}" y1="${A1.y}" x2="${A2.x}" y2="${A2.y}" stroke="${steel}" stroke-width="8"/>`;
+    html += `<line x1="${O1.x}" y1="${O1.y}" x2="${A1.x}" y2="${A1.y}" stroke="${brass}" stroke-width="8"/>`;
+    html += `<line x1="${O2.x}" y1="${O2.y}" x2="${A2.x}" y2="${A2.y}" stroke="${brass}" stroke-width="8"/>`;
+    [O1, O2, A1, A2].forEach(p => html += `<circle cx="${p.x}" cy="${p.y}" r="6" fill="${ink}"/>`);
+  } else if (kind === 'double') {
+    const { O1, O2, P1, P2 } = data;
+    html += `<line x1="${O1.x}" y1="${O1.y}" x2="${O2.x}" y2="${O2.y}" stroke="${line}" stroke-width="7"/>`;
+    html += `<line x1="${O1.x}" y1="${O1.y}" x2="${P1.x}" y2="${P1.y}" stroke="${brass}" stroke-width="8"/>`;
+    html += `<line x1="${P1.x}" y1="${P1.y}" x2="${P2.x}" y2="${P2.y}" stroke="${steel}" stroke-width="8"/>`;
+    html += `<line x1="${O2.x}" y1="${O2.y}" x2="${P2.x}" y2="${P2.y}" stroke="#8C5A22" stroke-width="8"/>`;
+    [O1, O2, P1, P2].forEach(p => html += `<circle cx="${p.x}" cy="${p.y}" r="6" fill="${ink}"/>`);
+  }
+  svg.innerHTML = html;
+}
+
+const linkGrid = document.getElementById('linkGrid');
+const linkState = [];
+LINKAGES.forEach((lk, i) => {
+  const card = document.createElement('div');
+  card.className = 'link-card';
+  card.innerHTML = `<div class="stage"><svg id="linkSvg-${i}" viewBox="0 0 380 300"></svg></div><h3>${lk.name}</h3><p>${lk.desc}</p><p class="example"><b>身近な例：</b>${lk.example}</p>`;
+  linkGrid.appendChild(card);
+  linkState.push({ angle: i * 0.9, speed: 0.014 });
+});
+
+function animateLinkages() {
+  LINKAGES.forEach((lk, i) => {
+    const svg = document.getElementById(`linkSvg-${i}`);
+    linkState[i].angle += linkState[i].speed;
+    const data = lk.fn(linkState[i].angle);
+    drawLinkage(svg, lk.kind, data);
+  });
+  requestAnimationFrame(animateLinkages);
+}
+animateLinkages();
+
+/* ============================================================
+   カム機構：カムの半径関数と、それを使ったロッドの上下動
+   ------------------------------------------------------------
+   ロッドが乗る接触点は「画面上でカムの一番高い場所」なので、
+   その点の元の角度は (180 − 回転角) になる（描画時の座標変換 x=sin, y=cos
+   の位相に合わせて導出）。ここを (−回転角) と取り違えると、カムの見た目と
+   ロッドの上下動が180°ずれる、という不具合になる。
+   ============================================================ */
+function camRadius(thetaDeg) {
+  const base = 40, bump = 46, peak = 180, sigma = 42;
+  let diff = Math.abs(((thetaDeg - peak + 540) % 360) - 180);
+  return base + bump * Math.exp(-(diff * diff) / (2 * sigma * sigma));
+}
+
+const camSvg = document.getElementById('camSvg');
+let camAngle = 0;
+
+function drawCam() {
+  const cx = 150, cy = 220, rotSpeed = camAngle;
+  let path = '';
+  for (let d = 0; d <= 360; d += 6) {
+    const r = camRadius(d);
+    const rad = (d + rotSpeed) * Math.PI / 180;
+    const x = cx + r * Math.sin(rad);
+    const y = cy + r * Math.cos(rad);
+    path += (d === 0 ? 'M' : 'L') + x + ',' + y + ' ';
+  }
+  path += 'Z';
+  // 画面上の最上点（ロッドとの接触点）に対応する、カム自身の元の角度
+  const contactAngle = ((180 - rotSpeed) % 360 + 360) % 360;
+  const rodBottom = cy - camRadius(contactAngle);
+  camSvg.innerHTML = `
+    <rect x="135" y="10" width="15" height="${rodBottom - 10}" fill="#5C7A8A"/>
+    <rect x="110" y="${rodBottom - 10}" width="65" height="22" fill="#1C2B39"/>
+    <path d="${path}" fill="#FBF3E1" stroke="#B8752E" stroke-width="4"/>
+    <circle cx="${cx}" cy="${cy}" r="7" fill="#1C2B39"/>
+    <text x="150" y="315" text-anchor="middle" font-family="Noto Sans JP" font-size="13" fill="#4B5A66">カム（回転軸を中心に回転）</text>
+  `;
+}
+
+function animateCam() {
+  camAngle = (camAngle + 1.1) % 360;
+  drawCam();
+  requestAnimationFrame(animateCam);
+}
+animateCam();
+
+/* ============================================================
+   パスカルの原理
+   圧力P = F1 / A1、取り出せる力 F2 = P × A2
+   ============================================================ */
+const f1Slider = document.getElementById('f1Slider');
+const a1Slider = document.getElementById('a1Slider');
+const a2Slider = document.getElementById('a2Slider');
+const f1Val = document.getElementById('f1Val');
+const a1Val = document.getElementById('a1Val');
+const a2Val = document.getElementById('a2Val');
+const pOut = document.getElementById('pOut');
+const f2Out = document.getElementById('f2Out');
+const pascalSvg = document.getElementById('pascalSvg');
+
+function updatePascal() {
+  const f1 = parseFloat(f1Slider.value);
+  const a1 = parseFloat(a1Slider.value);
+  const a2 = parseFloat(a2Slider.value);
+  f1Val.textContent = f1 + ' N';
+  a1Val.textContent = a1 + ' mm²';
+  a2Val.textContent = a2 + ' mm²';
+  const p = f1 / a1;
+  const f2 = p * a2;
+  pOut.textContent = p.toFixed(2) + ' N/mm²';
+  f2Out.textContent = f2.toFixed(1) + ' N';
+
+  const w1 = 30 + Math.sqrt(a1) * 1.6, w2 = 30 + Math.sqrt(a2) * 1.6;
+  pascalSvg.innerHTML = `
+    <path d="M60,40 L60,190 Q60,210 80,210 L200,210 Q210,210 210,190 L210,120 Q280,120 280,120 L280,190 Q280,210 300,210 L420,210 Q440,210 440,190 L440,40"
+      fill="none" stroke="#1C2B39" stroke-width="4"/>
+    <rect x="70" y="150" width="130" height="55" fill="#BFD9E8" opacity="0.6"/>
+    <rect x="290" y="150" width="140" height="55" fill="#BFD9E8" opacity="0.6"/>
+    <rect x="${135 - w1/2}" y="40" width="${w1}" height="115" fill="#FBF3E1" stroke="#B8752E" stroke-width="3"/>
+    <rect x="${365 - w2/2}" y="40" width="${w2}" height="115" fill="#FBF3E1" stroke="#5C7A8A" stroke-width="3"/>
+    <text x="135" y="30" text-anchor="middle" font-family="Noto Sans JP" font-size="13" font-weight="700" fill="#1C2B39">F1 = ${f1}N</text>
+    <text x="365" y="30" text-anchor="middle" font-family="Noto Sans JP" font-size="13" font-weight="700" fill="#1C2B39">F2 = ${f2.toFixed(1)}N</text>
+    <text x="135" y="185" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#1C2B39">A1=${a1}</text>
+    <text x="365" y="185" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#1C2B39">A2=${a2}</text>
+  `;
+}
+[f1Slider, a1Slider, a2Slider].forEach(s => s.addEventListener('input', updatePascal));
+updatePascal();
+
+/* ============================================================
+   ガソリン機関の4行程アニメーション（往復スライダクランク機構の実例）
+   ------------------------------------------------------------
+   クランク軸が2回転（720°）する間に、吸気→圧縮→膨張→排気の4行程が
+   1回ずつ行われる（教科書の記述どおり）。ピストンの位置は往復スライダ
+   クランク機構と同じ計算式（垂直方向）で求め、現在の行程はcrank軸の
+   角度（0〜720°）から自動的に判定してカードをハイライトする。
+   圧縮行程が終わる瞬間（クランク角=360°付近）に点火（スパーク）の
+   演出を入れ、そのあとの膨張行程では燃焼による発光がしだいに収まる
+   ように表現している。
+   ============================================================ */
+const CYCLE = [
+  { title: '①吸気行程', desc: 'ピストンが下がり、混合気がシリンダに吸い込まれる。', intake: true, exhaust: false },
+  { title: '②圧縮行程', desc: 'ピストンが上がり、混合気が押し縮められる。', intake: false, exhaust: false },
+  { title: '③膨張行程', desc: '点火した混合気が燃焼・膨張してピストンが押し下げられる。', intake: false, exhaust: false },
+  { title: '④排気行程', desc: 'ピストンが上がり、燃焼ガスが排出される。', intake: false, exhaust: true },
+];
+
+const engineCardWrap = document.getElementById('engineCardWrap');
+engineCardWrap.innerHTML = `
+  <div class="engine-feature">
+    <div class="head">
+      <h3>往復スライダクランク機構の実例：ガソリン機関</h3>
+      <span class="tag">STEP: <span id="enginePhaseTag">①吸気行程</span></span>
+    </div>
+    <p class="lead">クランクAが回転すると、ピストン（スライダ）が上下に往復します。圧縮行程が終わったところで点火（スパーク）が起こり、燃焼した混合気がピストンを押し下げます。</p>
+    <div class="engine-wrap">
+      <svg id="engineSvg" viewBox="0 0 220 300" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="cycle-grid" id="cycleGrid"></div>
+    </div>
+  </div>
+`;
+
+const cycleGrid = document.getElementById('cycleGrid');
+const engineSvg = document.getElementById('engineSvg');
+const enginePhaseTag = document.getElementById('enginePhaseTag');
+let cycleIndex = 0;
+
+function renderCycle() {
+  cycleGrid.innerHTML = '';
+  CYCLE.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = 'cycle-card' + (i === cycleIndex ? ' active' : '');
+    d.innerHTML = `<span class="n">STEP ${i+1}</span><h4>${c.title}</h4><p>${c.desc}</p>`;
+    cycleGrid.appendChild(d);
+  });
+  enginePhaseTag.textContent = CYCLE[cycleIndex].title;
+}
+renderCycle();
+
+let strokeTheta = 0; // 0〜720度（クランク2回転で1サイクル）
+function drawEngine() {
+  const crankTheta = (strokeTheta % 360) * Math.PI / 180;
+  const phase = Math.floor(strokeTheta / 180) % 4;
+  if (phase !== cycleIndex) { cycleIndex = phase; renderCycle(); }
+
+  const ccx = 110, ccy = 230, crankLen = 30, rodLen = 95;
+  const crankPin = { x: ccx + crankLen * Math.sin(crankTheta), y: ccy - crankLen * Math.cos(crankTheta) };
+  const dxSq = rodLen * rodLen - (crankPin.x - ccx) * (crankPin.x - ccx);
+  const pistonY = crankPin.y - Math.sqrt(Math.max(0, dxSq));
+
+  const intakeOpen = CYCLE[phase].intake;
+  const exhaustOpen = CYCLE[phase].exhaust;
+
+  // 点火（圧縮行程の終わり=クランク角360°付近）のフラッシュ演出
+  const distToIgnition = Math.abs(strokeTheta - 360);
+  const flash = Math.max(0, 1 - distToIgnition / 15);
+  // 膨張行程の前半にかけて、燃焼のグロー（発光）がしだいに収まる
+  const glow = (phase === 2) ? Math.max(0, 1 - (strokeTheta - 360) / 110) : 0;
+
+  const sparkX = 110, sparkY = 34;
+  const flashRays = flash > 0
+    ? [0, 60, 120, 180, 240, 300].map(a => {
+        const rad = a * Math.PI / 180;
+        const x2 = sparkX + (10 + 8 * flash) * Math.cos(rad);
+        const y2 = sparkY + (10 + 8 * flash) * Math.sin(rad);
+        return `<line x1="${sparkX}" y1="${sparkY}" x2="${x2}" y2="${y2}" stroke="#F2B705" stroke-width="${2 + 2 * flash}" opacity="${flash}"/>`;
+      }).join('')
+    : '';
+
+  engineSvg.innerHTML = `
+    <!-- シリンダ -->
+    <rect x="70" y="30" width="80" height="190" fill="none" stroke="#1C2B39" stroke-width="4"/>
+    <!-- 燃焼室のグロー（点火直後は明るく、膨張とともに収まる） -->
+    ${glow > 0 ? `<rect x="72" y="32" width="76" height="${Math.max(0, pistonY - 32)}" fill="#F2841D" opacity="${(glow * 0.45).toFixed(2)}"/>` : ''}
+    <!-- 点火プラグ -->
+    <rect x="104" y="20" width="12" height="10" fill="#4B5A66"/>
+    <line x1="110" y1="30" x2="110" y2="36" stroke="#1C2B39" stroke-width="2"/>
+    ${flashRays}
+    ${flash > 0 ? `<circle cx="${sparkX}" cy="${sparkY}" r="${3 + 4 * flash}" fill="#FFF3C4" opacity="${flash}"/>` : ''}
+    <!-- 吸気弁・排気弁 -->
+    <rect x="78" y="18" width="18" height="${intakeOpen ? 18 : 8}" fill="${intakeOpen ? '#5C7A8A' : '#C9C2AA'}"/>
+    <rect x="124" y="18" width="18" height="${exhaustOpen ? 18 : 8}" fill="${exhaustOpen ? '#B8752E' : '#C9C2AA'}"/>
+    <text x="87" y="14" text-anchor="middle" font-family="Noto Sans JP" font-size="10" fill="#4B5A66">吸気弁</text>
+    <text x="133" y="14" text-anchor="middle" font-family="Noto Sans JP" font-size="10" fill="#4B5A66">排気弁</text>
+    <!-- ピストン -->
+    <rect x="74" y="${pistonY}" width="72" height="34" fill="#FBF3E1" stroke="#B8752E" stroke-width="3"/>
+    <!-- 連接棒 -->
+    <line x1="${ccx}" y1="${pistonY + 34}" x2="${crankPin.x}" y2="${crankPin.y}" stroke="#5C7A8A" stroke-width="6"/>
+    <!-- クランク -->
+    <line x1="${ccx}" y1="${ccy}" x2="${crankPin.x}" y2="${crankPin.y}" stroke="#8C5A22" stroke-width="7"/>
+    <circle cx="${ccx}" cy="${ccy}" r="34" fill="none" stroke="#C9C2AA" stroke-width="2" stroke-dasharray="3 3"/>
+    <circle cx="${ccx}" cy="${ccy}" r="6" fill="#1C2B39"/>
+    <circle cx="${crankPin.x}" cy="${crankPin.y}" r="5" fill="#1C2B39"/>
+    <text x="110" y="280" text-anchor="middle" font-family="Noto Sans JP" font-size="12" font-weight="700" fill="#1C2B39">${CYCLE[phase].title}</text>
+  `;
+}
+
+function animateEngine() {
+  strokeTheta = (strokeTheta + 1.4) % 720;
+  drawEngine();
+  requestAnimationFrame(animateEngine);
+}
+animateEngine();
+
+/* ============================================================
+   共通部品カード
+   ============================================================ */
+const PARTS = [
+  { name: 'ねじ', desc: '円筒形にねじ山をもつ部品。主に部品どうしを締結（固定）するために使われる。',
+    svg: `<svg viewBox="0 0 90 70"><rect x="35" y="8" width="20" height="10" fill="#B8752E"/><rect x="40" y="18" width="10" height="40" fill="#B8752E"/><path d="M40,20 L50,25 M40,28 L50,33 M40,36 L50,41 M40,44 L50,49" stroke="#8C5A22" stroke-width="2"/></svg>` },
+  { name: 'ばね', desc: 'コイル状に巻いた金属の弾性を利用する部品。運動を取り出したり、衝撃をやわらげたりする。',
+    svg: `<svg viewBox="0 0 90 70"><path d="M20,10 Q35,10 35,20 Q35,30 20,30 Q35,30 35,40 Q35,50 20,50 Q35,50 35,60" fill="none" stroke="#5C7A8A" stroke-width="4"/></svg>` },
+  { name: '軸と軸受', desc: '軸受は回転する軸を支え、なめらかに回転させる部品。転がり軸受と滑り軸受がある。',
+    svg: `<svg viewBox="0 0 90 70"><circle cx="45" cy="35" r="24" fill="none" stroke="#B8752E" stroke-width="5"/><circle cx="45" cy="35" r="12" fill="none" stroke="#5C7A8A" stroke-width="5"/><circle cx="45" cy="35" r="3" fill="#1C2B39"/></svg>` },
+];
+const partsGrid = document.getElementById('partsGrid');
+PARTS.forEach(p => {
+  const c = document.createElement('div');
+  c.className = 'part-card';
+  c.innerHTML = `<div class="icon">${p.svg}</div><h3>${p.name}</h3><p>${p.desc}</p>`;
+  partsGrid.appendChild(c);
+});
+
+/* ============================================================
+   まとめクイズ
+   ============================================================ */
+const QUIZ = [
+  {
+    q: '平行クランク機構で、向かい合うリンクの長さを等しくすると、A1とA2はどのように動くか。',
+    opts: ['同じ向きに、同時に回転する', '互いに逆向きに回転する', '一方だけが回転し、他方は止まったまま', '両方とも往復運動（揺動）する'],
+    correct: 0,
+    explain: '向かい合うリンクの長さをそろえると、A1とA2は常に同じ向き・同じ角度で回転する。観覧車のゴンドラが常に水平を保つのもこの仕組みを利用している。'
+  },
+  {
+    q: 'カム機構は、回転運動をどんな運動に変える仕組みか。',
+    opts: ['別の回転運動', '往復直線運動', '止まったまま', '曲線に沿った運動のみ'],
+    correct: 1,
+    explain: 'カムの形（プロファイル）に沿ってロッドが押し上げられたり下がったりすることで、回転運動が往復直線運動に変換される。'
+  },
+  {
+    q: 'ねじやばね、軸受のような機械の部品の形や大きさを、JISなどの規格で統一しておく利点は何か。',
+    opts: ['どの機械にも共通の部品を使い回せて、修理や交換がしやすくなる', '部品の値段が必ず安くなる', '機械の性能が必ず高くなる', '一度定めたら二度と変更できなくなる'],
+    correct: 0,
+    explain: '共通部品として規格化しておくことで、部品ごとに一から作る必要がなくなり、どの機械にも使い回せて修理や交換がしやすくなる。'
+  },
+  {
+    q: '家庭で使う自転車の、日常的な保守点検の責任は主に誰にあるか。',
+    opts: ['自転車のメーカー', '販売した自転車店のみ', '使用者自身', '国や自治体'],
+    correct: 2,
+    explain: '飛行機は航空会社や整備士が保守点検を行うが、家庭用の自転車は使用者自身が日常の点検・注油などを行う責任がある。'
+  },
+  {
+    q: 'ガソリン機関で、点火（スパーク）が起こるのはどのタイミングか。',
+    opts: ['吸気行程が始まったとき', '圧縮行程が終わったとき', '膨張行程が終わったとき', '排気行程の途中'],
+    correct: 1,
+    explain: '混合気を圧縮しきったタイミングで点火し、燃焼・膨張した混合気がピストンを押し下げることで動力を得ている。'
+  },
+];
+
+const quizList = document.getElementById('quizList');
+const scoreOut = document.getElementById('scoreOut');
+let answers = new Array(QUIZ.length).fill(null);
+
+function renderQuiz() {
+  quizList.innerHTML = '';
+  QUIZ.forEach((item, qi) => {
+    const div = document.createElement('div');
+    div.className = 'quiz-item';
+    div.innerHTML = `
+      <p class="q">Q${qi+1}. ${item.q}</p>
+      <div class="opts">${item.opts.map((opt, oi) => `<button class="opt" data-q="${qi}" data-o="${oi}">${opt}</button>`).join('')}</div>
+      <div class="explain" id="explain-${qi}">${item.explain}</div>
+    `;
+    quizList.appendChild(div);
+  });
+  document.querySelectorAll('.quiz-item .opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qi = parseInt(btn.dataset.q), oi = parseInt(btn.dataset.o);
+      if (answers[qi] !== null) return;
+      answers[qi] = oi;
+      document.querySelectorAll(`.opt[data-q="${qi}"]`).forEach(b => {
+        const bo = parseInt(b.dataset.o);
+        if (bo === QUIZ[qi].correct) b.classList.add('correct');
+        else if (bo === oi) b.classList.add('wrong');
+      });
+      document.getElementById(`explain-${qi}`).classList.add('show');
+      updateScore();
+    });
+  });
+}
+function updateScore() {
+  const score = answers.reduce((acc, a, i) => acc + (a === QUIZ[i].correct ? 1 : 0), 0);
+  scoreOut.textContent = `${score} / ${QUIZ.length}`;
+}
+document.getElementById('resetBtn').addEventListener('click', () => {
+  answers = new Array(QUIZ.length).fill(null);
+  renderQuiz(); updateScore();
+});
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const record = {
+    saved_at: new Date().toISOString(),
+    lesson: '機械を動かすしくみと工夫',
+    score: `${answers.reduce((acc, a, i) => acc + (a === QUIZ[i].correct ? 1 : 0), 0)} / ${QUIZ.length}`,
+    answers: QUIZ.map((item, i) => ({
+      question: item.q,
+      selected: answers[i] === null ? '未回答' : item.opts[answers[i]],
+      correct: item.opts[item.correct],
+      is_correct: answers[i] === item.correct
+    }))
+  };
+  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `mechanisms-quiz-result_${record.saved_at.slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+renderQuiz(); updateScore();
+
+/* ============================================================
+   スクロールに応じた左ナビのハイライト
+   ============================================================ */
+const sections = document.querySelectorAll('section.step');
+const navLinks = document.querySelectorAll('#stepNav a');
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`#stepNav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>
