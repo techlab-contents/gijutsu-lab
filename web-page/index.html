@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webページをつくろう｜新1年生へ贈る学校ガイド</title>
+<!--
+=====================================================================
+  技術ラボ（gijutsu-lab）単元：Webページをつくろう（中学3年 情報）
+  ---------------------------------------------------------------
+  ■ このファイルについて（担当者が変わったときのためのメモ）
+  ・このHTMLファイル1つだけで動きます。外部サービス・ログイン・ビルドは不要です。
+  ・GitHub Pages に置き、生徒には URL を伝えるだけで使えます。
+  ・生徒の作業内容は、使っている端末のブラウザ内（localStorage）に自動保存されます。
+    端末をまたいで共有はされないため、毎時間「ダウンロード」→ Classroom 提出を行います。
+  ■ よく変更する場所（すべて下の <script> 内にあります）
+  ・各回の説明文 …………… const LESSONS
+  ・テーマの例 ………………… const THEMES
+  ・動きの例（JavaScript）… const JS_EXAMPLES
+  ・みんなの作品（閲覧会）… const GALLERY（作品フォルダ名・学年・最大の組と番号）
+  ・最初に入っているコード … const STARTER
+  ・チェック表の項目 ……… const CHECKS
+  ・イラスト ………………… const ICONS（SVGで追加できます）
+  ・リンクの例に使うURL …… const LINK_SAMPLE
+  ■ 先生用タブの表示
+  ・URLの最後に ?teacher をつけて開いたときだけ「先生用」タブが出ます。
+    例）https://techlab-contents.github.io/gijutsu-lab/web-page/?teacher
+  ・保存キー（変更すると過去の自動保存は読めなくなります）… const STORAGE_KEY
+=====================================================================
+-->
+<style>
+  :root {
+    --main: #1f6feb;
+    --main-dark: #1554b8;
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --line: #d9dee5;
+    --text: #1f2328;
+    --sub: #59636e;
+    --ok: #1a7f37;
+    --warn: #bf5700;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Meiryo", sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    font-size: 15px;
+  }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- ヘッダー ---------- */
+  header {
+    background: var(--main);
+    color: #fff;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: bold; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+  .toolbar label { font-size: 14px; }
+  .toolbar input[type=text] {
+    width: 90px; padding: 5px 8px; border-radius: 6px; border: none; font: inherit;
+  }
+  .btn {
+    border: none; border-radius: 6px; padding: 6px 12px; background: #fff; color: var(--main-dark);
+    font-weight: bold;
+  }
+  .btn:hover { background: #e8f0fe; }
+  .btn.ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.7); font-weight: normal; }
+  .btn.ghost:hover { background: rgba(255,255,255,.15); }
+  #saveState { font-size: 13px; opacity: .9; min-width: 120px; }
+
+  /* ---------- タブ ---------- */
+  nav {
+    display: flex; gap: 4px; padding: 6px 10px 0; background: #e9eef5; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+  }
+  nav button {
+    border: 1px solid var(--line); border-bottom: none; background: #f7f9fc; color: var(--sub);
+    padding: 6px 12px; border-radius: 8px 8px 0 0;
+  }
+  nav button.active { background: var(--panel); color: var(--main-dark); font-weight: bold; }
+  nav .spacer { flex: 1; }
+
+  /* ---------- 本体 ---------- */
+  main {
+    flex: 1; min-height: 0;
+    display: flex;
+    --gw: 36%;   /* 説明欄の幅 */
+    --ew: 32%;   /* コード欄の幅 */
+  }
+  section { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+  #guide { flex: 0 0 var(--gw); }
+  #editorSec { flex: 0 0 var(--ew); }
+  #previewSec { flex: 1 1 0; }
+  main.guide-hidden #guide, main.guide-hidden #split1 { display: none; }
+  /* 幅を変えるつまみ */
+  .splitter {
+    flex: 0 0 10px; cursor: col-resize; background: #e3e8ef; position: relative; touch-action: none;
+    border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  }
+  .splitter::after {
+    content: ""; position: absolute; left: 3px; top: 50%; width: 2px; height: 36px; margin-top: -18px;
+    border-left: 2px dotted #8a96a3;
+  }
+  .splitter:hover, .splitter.active { background: #cddcf5; }
+  body.dragging { cursor: col-resize; user-select: none; }
+  body.dragging iframe { pointer-events: none; }
+  nav .layout-reset { border: none; background: transparent; color: var(--sub); font-size: 13px; padding: 6px 8px; }
+  nav .layout-reset:hover { color: var(--main-dark); text-decoration: underline; }
+  .sec-title {
+    font-size: 13px; color: var(--sub); padding: 6px 10px; background: #eef1f5;
+    border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px;
+  }
+  .sec-title .right { margin-left: auto; display: flex; gap: 6px; }
+  .mini {
+    border: 1px solid var(--line); background: #fff; border-radius: 5px; padding: 2px 8px; font-size: 12px; color: var(--text);
+  }
+  .mini:hover { background: #e8f0fe; }
+  .mini:disabled { opacity: .4; cursor: default; background: #fff; }
+
+  #guide { background: var(--panel); overflow-y: auto; }
+  #guideBody { padding: 12px 14px 40px; line-height: 1.7; }
+  #guideBody h2 { font-size: 18px; margin: 4px 0 8px; color: var(--main-dark); }
+  #guideBody h3 { font-size: 15px; margin: 18px 0 6px; border-left: 4px solid var(--main); padding-left: 8px; }
+  #guideBody p { margin: 6px 0; }
+  #guideBody ul, #guideBody ol { padding-left: 1.4em; margin: 6px 0; }
+  .goal { background: #e8f0fe; border-radius: 8px; padding: 8px 10px; }
+  .note { background: #fff4e5; border-radius: 8px; padding: 8px 10px; }
+  .end { background: #e6f4ea; border-radius: 8px; padding: 8px 10px; }
+  .codebox { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
+  .codebox pre {
+    margin: 0; padding: 8px 10px; background: #f6f8fa; font-size: 13px; overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace; line-height: 1.5;
+  }
+  .codebox .cb-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #eef1f5; font-size: 12px; color: var(--sub); }
+  table.tbl { border-collapse: collapse; width: 100%; font-size: 14px; margin: 6px 0; }
+  table.tbl th, table.tbl td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  table.tbl th { background: #f2f4f7; }
+  code { background: #eef1f5; padding: 0 4px; border-radius: 4px; font-family: Consolas, monospace; }
+
+  #editor {
+    flex: 1; width: 100%; border: none; resize: none; padding: 10px 12px; outline: none;
+    font-family: Consolas, "Courier New", monospace; font-size: 15px; line-height: 1.6;
+    tab-size: 2; white-space: pre; background: #fffefb;
+  }
+  #preview { flex: 1; width: 100%; border: none; background: #fff; }
+
+  /* イラスト一覧 */
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 8px 0 14px; }
+  .icon-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px; text-align: center; font-size: 13px; background: #fafbfc; }
+  .icon-card img { width: 56px; height: 56px; display: block; margin: 2px auto 4px; }
+  .icon-card button { margin-top: 4px; }
+
+  /* みんなの作品 */
+  .gallery-ctrl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+  .gallery-ctrl select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); }
+  .gallery-ctrl .go { background: var(--main); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; }
+  .work-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+  .work-card {
+    border: 1px solid var(--line); border-radius: 8px; background: #fafbfc; padding: 8px; text-align: left;
+    display: flex; flex-direction: column; gap: 2px; min-height: 70px;
+  }
+  .work-card:hover { background: #e8f0fe; border-color: var(--main); }
+  .work-card .wno { font-weight: bold; color: var(--main-dark); }
+  .work-card .wtitle { font-size: 12px; color: var(--sub); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .work-card.seen { background: #e6f4ea; }
+  .work-card.seen .wno::after { content: "✔ 見た"; color: var(--ok); font-size: 12px; margin-left: 6px; white-space: nowrap; }
+  .work-card.mine { border: 2px solid #f0b400; }
+  #overlay .ov-nav { display: flex; gap: 8px; }
+
+  /* チェック表 */
+  .check { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .check .mark { width: 22px; flex-shrink: 0; text-align: center; font-weight: bold; }
+  .check.ok .mark { color: var(--ok); }
+  .check.ng .mark { color: #aab2bd; }
+  .check small { color: var(--sub); display: block; }
+
+  /* 全画面表示（閲覧会用） */
+  #overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 10; padding: 20px;
+  }
+  #overlay.show { display: flex; flex-direction: column; }
+  #overlay .ov-bar { display: flex; justify-content: space-between; align-items: center; color: #fff; padding-bottom: 8px; font-size: 16px; }
+  #overlay iframe { flex: 1; border: none; border-radius: 8px; background: #fff; }
+
+  /* トースト */
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff;
+    padding: 8px 16px; border-radius: 8px; display: none; z-index: 20;
+  }
+
+  /* 画面が狭いとき（縦に並べる） */
+  @media (max-width: 1000px) {
+    main { flex-direction: column; overflow-y: auto; }
+    #guide, #editorSec, #previewSec { flex: 0 0 auto; }
+    #guide { max-height: 45vh; }
+    #editorSec, #previewSec { height: 60vh; }
+    .splitter, nav .layout-reset { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Webページをつくろう｜新1年生へ贈る学校ガイド</h1>
+  <div class="toolbar">
+    <label>出席番号 <input type="text" id="studentNo" placeholder="例 3105" maxlength="4" inputmode="numeric" autocomplete="off"></label>
+    <button class="btn" id="btnDownload" title="今のコードをファイルとして保存します">⬇ ダウンロード</button>
+    <button class="btn" id="btnLoad" title="保存したファイルを開いて続きから作業します">📂 読み込み</button>
+    <button class="btn ghost" id="btnReset" title="コードを最初の状態に戻します">最初からやり直す</button>
+    <span id="saveState">　</span>
+    <input type="file" id="fileInput" accept=".html,.htm,text/html" hidden>
+  </div>
+</header>
+
+<nav id="tabs"></nav>
+
+<main id="main">
+  <section id="guide">
+    <div class="sec-title">📘 説明 <span class="right"><button class="mini" id="btnHideGuide">説明をとじる ◀</button></span></div>
+    <div id="guideBody"></div>
+  </section>
+
+  <div class="splitter" id="split1" title="左右にドラッグすると幅を変えられます（ダブルクリックでもとに戻す）"></div>
+
+  <section id="editorSec">
+    <div class="sec-title">✏️ コード（ここを書き換えます）
+      <span class="right">
+        <button class="mini" id="btnUndo" title="1つ前の状態に戻します（Ctrl + Z）">↶ 戻る</button>
+        <button class="mini" id="btnRedo" title="戻したものを元に進めます（Ctrl + Y）">↷ 進む</button>
+        <button class="mini" id="btnShowGuide" style="display:none">▶ 説明をひらく</button></span>
+    </div>
+    <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+  </section>
+
+  <div class="splitter" id="split2" title="左右にドラッグすると幅を変えられます（ダブルクリックでもとに戻す）"></div>
+
+  <section id="previewSec">
+    <div class="sec-title">👀 プレビュー（できあがりの見た目）
+      <span class="right"><button class="mini" id="btnFull">大きく表示</button></span>
+    </div>
+    <iframe id="preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" title="プレビュー"></iframe>
+  </section>
+</main>
+
+<div id="overlay">
+  <div class="ov-bar"><span id="ovTitle">作品を大きく表示中</span>
+    <span class="ov-nav">
+      <button class="btn" id="btnPrevWork">◀ 前へ</button>
+      <button class="btn" id="btnNextWork">次へ ▶</button>
+      <button class="btn" id="btnCloseFull">✕ とじる</button>
+    </span></div>
+  <iframe id="previewFull" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" title="大きく表示"></iframe>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* =================================================================
+   設定・データ（授業内容を直すときは、ここを書き換えます）
+   ================================================================= */
+
+const STORAGE_KEY = "gijutsu-lab_web-guide_v1";
+
+/* 最初に入っているコード */
+const STARTER = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>新1年生へ 〇〇ガイド</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 20px;
+    line-height: 1.7;
+  }
+  h1 {
+    color: #1a5fb4;
+  }
+</style>
+</head>
+<body>
+
+  <h1>新1年生へ 〇〇ガイド</h1>
+  <p>ここに、このページで伝えたいことを書きます。</p>
+
+  <h2>〇〇ってどんなもの？</h2>
+  <p>ここに説明を書きます。</p>
+
+</body>
+</html>
+`;
+
+/* テーマの例（あくまで例。ここにないテーマでもよい） */
+const THEMES = [
+  { cat: "部活動", items: ["〇〇部の紹介", "入部までの流れ", "〇〇部の1年生の1日", "大会・発表会について"] },
+  { cat: "学校行事", items: ["体育祭", "音楽祭", "修学旅行", "校外学習", "1年間の行事カレンダー"] },
+  { cat: "勉強", items: ["定期テストの勉強法", "提出物で困らないコツ", "〇〇（教科）の楽しみ方", "家庭学習の進め方"] },
+  { cat: "学校生活", items: ["中学校の1日の流れ", "給食・昼休み", "委員会活動", "小学校とのちがい", "持ち物・準備"] },
+  { cat: "学校の場所・施設", items: ["図書室の使い方", "技術室・理科室などの特別教室", "校舎の案内（どこに何がある？）"] },
+  { cat: "先輩からの一言", items: ["入学してよかったこと", "やっておけばよかったこと", "3年間でがんばったこと", "友だちづくりのコツ"] },
+];
+
+/* チェック表（自動判定）
+   test(doc, code) が true なら ✔ になります。auto:false は自分で確認する項目です。 */
+const CHECKS = [
+  { label: "タイトル（h1）を自分のテーマに変えた", hint: "「〇〇」が残っていないか", lesson: 1,
+    test: (d) => { const h = d.querySelector("h1"); return !!h && h.textContent.trim() !== "" && !h.textContent.includes("〇〇"); } },
+  { label: "段落（p）が3つ以上ある", hint: "<p>〜</p>", lesson: 1,
+    test: (d) => d.querySelectorAll("p").length >= 3 },
+  { label: "小見出し（h2）が2つ以上ある", hint: "<h2>〜</h2>", lesson: 2,
+    test: (d) => d.querySelectorAll("h2").length >= 2 },
+  { label: "箇条書き（ul / ol）を使った", hint: "<ul><li>〜</li></ul>", lesson: 2,
+    test: (d) => d.querySelectorAll("ul li, ol li").length >= 2 },
+  { label: "CSSで色を2か所以上指定した", hint: "color: / background-color:", lesson: 3,
+    test: (d) => { const s = [...d.querySelectorAll("style")].map(x => x.textContent).join(""); return (s.match(/(^|[^-])color\s*:|background(-color)?\s*:/g) || []).length >= 2; } },
+  { label: "CSSで枠や余白を使った", hint: "border: / padding: / border-radius:", lesson: 3,
+    test: (d) => { const s = [...d.querySelectorAll("style")].map(x => x.textContent).join(""); return /border\s*:|padding\s*:|border-radius\s*:/.test(s); } },
+  { label: "リンク（a）を使った", hint: "<a href=\"#…\">もくじ</a> など", lesson: 2,
+    test: (d) => d.querySelectorAll("a[href]").length >= 1 },
+  { label: "イラスト（img）を入れて、alt（説明）をつけた", hint: "「イラスト」タブから挿入", lesson: 3,
+    test: (d) => { const im = [...d.querySelectorAll("img")]; return im.length >= 1 && im.every(i => (i.getAttribute("alt") || "").trim() !== ""); } },
+  { label: "ボタンを押すと何かが変わる（JavaScript）", hint: "<button> と <script>", lesson: 4,
+    test: (d) => !!d.querySelector("button") && [...d.querySelectorAll("script")].some(s => s.textContent.trim().length > 10) },
+  { label: "画像は「イラスト」タブのものだけを使った（ルール）", hint: "写真やネットの画像を使わない", lesson: 3,
+    test: (d) => [...d.querySelectorAll("img")].every(i => (i.getAttribute("src") || "").startsWith("data:image/svg+xml")) },
+  { label: "名前・写真など個人がわかる情報を書いていない", hint: "自分で確認", lesson: 2, auto: false },
+  { label: "新1年生が読んで分かる言葉で書いた", hint: "自分で確認", lesson: 5, auto: false },
+];
+
+/* リンクの例に使うURL（学校のホームページなどに変えてもよい） */
+const LINK_SAMPLE = { url: "https://www.mext.go.jp/", label: "文部科学省のページ" };
+
+/* イラスト（すべてこの教材用に作ったオリジナルのSVG。著作権の心配はありません）
+   追加するときは { name: "名前", cat: "分類", svg: "<中身>" } を足します（100×100の範囲で描く）。 */
+const ICON_CATS = ["学校生活", "教科", "行事・季節", "マーク"];
+const ICONS = [
+  { name: "学校", cat: "学校生活", svg: "<rect x='12' y='42' width='76' height='48' fill='#f6dfb0'/><polygon points='6,44 50,14 94,44' fill='#d9534f'/><circle cx='50' cy='32' r='7' fill='#fff' stroke='#555' stroke-width='2'/><path d='M50 28v4h3' stroke='#555' stroke-width='2' fill='none'/><rect x='20' y='52' width='14' height='12' fill='#8ecae6'/><rect x='66' y='52' width='14' height='12' fill='#8ecae6'/><rect x='42' y='64' width='16' height='26' fill='#8d6e63'/><rect x='6' y='88' width='88' height='4' fill='#6aa84f'/>" },
+  { name: "本", cat: "教科", svg: "<path d='M50 28C40 20 22 20 10 24v54c12-4 30-4 40 4z' fill='#4f8fd6'/><path d='M50 28c10-8 28-8 40-4v54c-12-4-30-4-40 4z' fill='#6fa8e6'/><path d='M50 28v54' stroke='#2b5a9c' stroke-width='2'/><path d='M18 36h22M18 46h22M18 56h22M60 36h22M60 46h22M60 56h22' stroke='#fff' stroke-width='3' stroke-linecap='round'/>" },
+  { name: "えんぴつ", cat: "学校生活", svg: "<g transform='rotate(45 50 50)'><rect x='40' y='8' width='20' height='62' fill='#f5c542'/><rect x='40' y='8' width='20' height='10' fill='#e57373'/><rect x='40' y='18' width='20' height='5' fill='#bbb'/><polygon points='40,70 60,70 50,90' fill='#f1d3a5'/><polygon points='46,82 54,82 50,90' fill='#444'/></g>" },
+  { name: "音符", cat: "教科", svg: "<path d='M38 70V22l40-8v48' stroke='#7e57c2' stroke-width='6' fill='none' stroke-linejoin='round'/><path d='M38 30l40-8' stroke='#7e57c2' stroke-width='9'/><ellipse cx='30' cy='72' rx='11' ry='8' fill='#7e57c2'/><ellipse cx='70' cy='64' rx='11' ry='8' fill='#7e57c2'/>" },
+  { name: "ボール", cat: "行事・季節", svg: "<circle cx='50' cy='50' r='38' fill='#fff' stroke='#333' stroke-width='4'/><polygon points='50,36 63,45 58,60 42,60 37,45' fill='#333'/><path d='M50 36V13M63 45l21-7M58 60l13 19M42 60L29 79M37 45l-21-7' stroke='#333' stroke-width='3'/>" },
+  { name: "トロフィー", cat: "行事・季節", svg: "<path d='M30 14h40v22a20 20 0 0 1-40 0z' fill='#f2b632'/><path d='M30 20H16c0 14 8 20 16 20M70 20h14c0 14-8 20-16 20' stroke='#f2b632' stroke-width='5' fill='none'/><rect x='45' y='55' width='10' height='14' fill='#d99a1e'/><rect x='32' y='69' width='36' height='10' rx='2' fill='#8d6e63'/><rect x='26' y='79' width='48' height='8' rx='2' fill='#6d4c41'/><path d='M50 22l3 6 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z' fill='#fff'/>" },
+  { name: "給食", cat: "学校生活", svg: "<path d='M60 22L84 46M68 16L90 40' stroke='#8d6e63' stroke-width='4' stroke-linecap='round'/><path d='M22 48c4-14 52-14 56 0' fill='#fff' stroke='#ddd' stroke-width='2'/><path d='M14 50h72a36 32 0 0 1-72 0z' fill='#e0734f'/><rect x='12' y='46' width='76' height='7' rx='3' fill='#c75b3a'/>" },
+  { name: "さくら", cat: "行事・季節", svg: "<g fill='#f8a5c2'><circle cx='50' cy='28' r='14'/><circle cx='71' cy='43' r='14'/><circle cx='63' cy='68' r='14'/><circle cx='37' cy='68' r='14'/><circle cx='29' cy='43' r='14'/></g><circle cx='50' cy='50' r='9' fill='#f06292'/><circle cx='50' cy='50' r='4' fill='#fff59d'/>" },
+  { name: "カレンダー", cat: "学校生活", svg: "<rect x='14' y='20' width='72' height='66' rx='6' fill='#fff' stroke='#555' stroke-width='3'/><rect x='14' y='20' width='72' height='18' rx='6' fill='#e53935'/><path d='M32 14v14M68 14v14' stroke='#555' stroke-width='5' stroke-linecap='round'/><g fill='#90a4ae'><rect x='24' y='46' width='10' height='9'/><rect x='45' y='46' width='10' height='9'/><rect x='66' y='46' width='10' height='9'/><rect x='24' y='64' width='10' height='9'/><rect x='45' y='64' width='10' height='9'/></g><rect x='66' y='64' width='10' height='9' fill='#e53935'/>" },
+  { name: "時計", cat: "学校生活", svg: "<circle cx='50' cy='50' r='38' fill='#fff' stroke='#26a69a' stroke-width='7'/><path d='M50 50V26M50 50l16 10' stroke='#333' stroke-width='5' stroke-linecap='round'/><circle cx='50' cy='50' r='4' fill='#333'/>" },
+  { name: "星", cat: "マーク", svg: "<polygon points='50,8 61,38 93,38 67,57 77,88 50,69 23,88 33,57 7,38 39,38' fill='#ffca28' stroke='#f9a825' stroke-width='3' stroke-linejoin='round'/>" },
+  { name: "ハート", cat: "マーク", svg: "<path d='M50 86C20 64 8 48 8 32A20 20 0 0 1 50 24a20 20 0 0 1 42 8c0 16-12 32-42 54z' fill='#ef5350'/>" },
+  { name: "電球", cat: "マーク", svg: "<circle cx='50' cy='40' r='26' fill='#fff176' stroke='#f9a825' stroke-width='3'/><rect x='38' y='62' width='24' height='14' fill='#bdbdbd'/><path d='M38 68h24M38 74h24' stroke='#9e9e9e' stroke-width='2'/><path d='M44 81h12' stroke='#757575' stroke-width='5' stroke-linecap='round'/><path d='M44 46l6-9 6 9' stroke='#f9a825' stroke-width='3' fill='none'/>" },
+  { name: "バス", cat: "行事・季節", svg: "<rect x='12' y='24' width='76' height='50' rx='8' fill='#42a5f5'/><rect x='18' y='32' width='18' height='16' fill='#e3f2fd'/><rect x='41' y='32' width='18' height='16' fill='#e3f2fd'/><rect x='64' y='32' width='18' height='16' fill='#e3f2fd'/><rect x='12' y='56' width='76' height='5' fill='#1e88e5'/><circle cx='30' cy='76' r='8' fill='#333'/><circle cx='70' cy='76' r='8' fill='#333'/>" },
+  { name: "ふきだし", cat: "マーク", svg: "<path d='M14 20h72a6 6 0 0 1 6 6v36a6 6 0 0 1-6 6H44L28 84V68H14a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z' fill='#fff' stroke='#5c6bc0' stroke-width='4' stroke-linejoin='round'/><circle cx='34' cy='44' r='4' fill='#5c6bc0'/><circle cx='50' cy='44' r='4' fill='#5c6bc0'/><circle cx='66' cy='44' r='4' fill='#5c6bc0'/>" },
+  { name: "フラスコ", cat: "教科", svg: "<path d='M40 12h20M44 12v26L22 80a6 6 0 0 0 5 8h46a6 6 0 0 0 5-8L56 38V12' fill='#e3f2fd' stroke='#455a64' stroke-width='4' stroke-linejoin='round'/><path d='M31 64h38l8 16a4 4 0 0 1-4 5H27a4 4 0 0 1-4-5z' fill='#66bb6a'/><circle cx='45' cy='74' r='3' fill='#fff'/><circle cx='57' cy='70' r='2' fill='#fff'/>" },
+  { name: "計算", cat: "教科", svg: "<rect x='10' y='10' width='38' height='38' rx='8' fill='#ef5350'/><rect x='52' y='10' width='38' height='38' rx='8' fill='#42a5f5'/><rect x='10' y='52' width='38' height='38' rx='8' fill='#66bb6a'/><rect x='52' y='52' width='38' height='38' rx='8' fill='#ffa726'/><path d='M29 20v18M20 29h18M62 29h18M22 64l14 14M36 64L22 78M62 71h18' stroke='#fff' stroke-width='5' stroke-linecap='round'/><circle cx='71' cy='62' r='3' fill='#fff'/><circle cx='71' cy='80' r='3' fill='#fff'/>" },
+  { name: "地球", cat: "教科", svg: "<circle cx='50' cy='50' r='38' fill='#4fc3f7'/><path d='M28 24c8 4 6 12 14 14s4 12-4 14-12 8-10 16M62 16c-2 8 6 10 12 8s10 8 6 14-12 2-14 10 6 14 0 20' fill='none' stroke='#66bb6a' stroke-width='9' stroke-linecap='round'/>" },
+  { name: "英語", cat: "教科", svg: "<rect x='8' y='22' width='84' height='56' rx='10' fill='#26a69a'/><text x='50' y='61' font-size='28' font-family='Arial,sans-serif' font-weight='bold' fill='#fff' text-anchor='middle'>ABC</text>" },
+  { name: "パレット", cat: "教科", svg: "<path d='M50 12C26 12 10 30 10 50s16 38 36 38c8 0 10-6 6-12s0-12 8-12h12c12 0 18-8 18-18C90 26 72 12 50 12z' fill='#f3d9b1' stroke='#a1887f' stroke-width='3'/><circle cx='32' cy='38' r='7' fill='#e53935'/><circle cx='50' cy='28' r='7' fill='#fdd835'/><circle cx='68' cy='36' r='7' fill='#43a047'/><circle cx='28' cy='58' r='7' fill='#1e88e5'/>" },
+  { name: "金づち", cat: "教科", svg: "<g transform='rotate(-35 50 50)'><rect x='46' y='34' width='8' height='56' rx='3' fill='#a1887f'/><rect x='26' y='16' width='48' height='20' rx='4' fill='#607d8b'/></g>" },
+  { name: "パソコン", cat: "教科", svg: "<rect x='18' y='18' width='64' height='44' rx='4' fill='#455a64'/><rect x='23' y='23' width='54' height='34' fill='#81d4fa'/><path d='M8 70h84l-6 10H14z' fill='#90a4ae'/>" },
+  { name: "ノート", cat: "学校生活", svg: "<rect x='20' y='10' width='60' height='80' rx='4' fill='#fff' stroke='#5c6bc0' stroke-width='4'/><rect x='20' y='10' width='12' height='80' fill='#5c6bc0'/><path d='M40 30h30M40 44h30M40 58h30M40 72h20' stroke='#9fa8da' stroke-width='3' stroke-linecap='round'/>" },
+  { name: "黒板", cat: "学校生活", svg: "<path d='M30 74v14M70 74v14' stroke='#8d6e63' stroke-width='5'/><rect x='8' y='16' width='84' height='58' rx='4' fill='#2e7d32' stroke='#8d6e63' stroke-width='5'/><path d='M20 34h30M20 46h44M20 58h22' stroke='#fff' stroke-width='3' stroke-linecap='round'/>" },
+  { name: "電車", cat: "学校生活", svg: "<path d='M34 76l-8 14M66 76l8 14M28 86h44' stroke='#555' stroke-width='4' stroke-linecap='round'/><rect x='22' y='12' width='56' height='64' rx='12' fill='#66bb6a'/><rect x='30' y='22' width='40' height='22' rx='4' fill='#e8f5e9'/><circle cx='36' cy='60' r='5' fill='#fff59d'/><circle cx='64' cy='60' r='5' fill='#fff59d'/>" },
+  { name: "旗", cat: "行事・季節", svg: "<path d='M24 10v82' stroke='#795548' stroke-width='5' stroke-linecap='round'/><path d='M26 14h56l-12 16 12 16H26z' fill='#e53935'/><circle cx='24' cy='10' r='5' fill='#fdd835'/>" },
+  { name: "メダル", cat: "行事・季節", svg: "<path d='M30 8h16l8 30H38zM70 8H54l-8 30h16z' fill='#1e88e5'/><circle cx='50' cy='62' r='26' fill='#ffca28' stroke='#f9a825' stroke-width='4'/><text x='50' y='72' font-size='28' font-family='Arial,sans-serif' font-weight='bold' fill='#f57f17' text-anchor='middle'>1</text>" },
+  { name: "卒業証書", cat: "行事・季節", svg: "<g transform='rotate(-30 50 50)'><rect x='12' y='40' width='76' height='20' rx='10' fill='#3949ab'/><ellipse cx='86' cy='50' rx='4' ry='10' fill='#fff8e1'/><rect x='45' y='38' width='10' height='24' fill='#e53935'/></g><path d='M52 58l-8 22M56 58l10 20' stroke='#e53935' stroke-width='4' stroke-linecap='round'/>" },
+  { name: "太陽", cat: "行事・季節", svg: "<g stroke='#ffb300' stroke-width='6' stroke-linecap='round'><path d='M50 8v12M50 80v12M8 50h12M80 50h12M20 20l9 9M71 71l9 9M20 80l9-9M71 29l9-9'/></g><circle cx='50' cy='50' r='20' fill='#ffb300'/>" },
+  { name: "雪", cat: "行事・季節", svg: "<g stroke='#4fc3f7' stroke-width='5' stroke-linecap='round' fill='none'><path d='M50 10v80M15 30l70 40M15 70l70-40M42 18l8 8 8-8M42 82l8-8 8 8'/></g>" },
+  { name: "落ち葉", cat: "行事・季節", svg: "<path d='M20 80C10 40 40 12 86 14 88 60 60 90 20 80z' fill='#ef6c00'/><path d='M20 80L70 30' stroke='#bf360c' stroke-width='3'/><path d='M12 90l10-10' stroke='#6d4c41' stroke-width='4' stroke-linecap='round'/>" },
+  { name: "虫めがね", cat: "マーク", svg: "<circle cx='42' cy='42' r='24' fill='#e1f5fe' stroke='#455a64' stroke-width='7'/><path d='M60 60l24 24' stroke='#8d6e63' stroke-width='11' stroke-linecap='round'/>" },
+  { name: "チェック", cat: "マーク", svg: "<circle cx='50' cy='50' r='40' fill='#43a047'/><path d='M30 52l14 14 26-30' stroke='#fff' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/>" },
+  { name: "注意", cat: "マーク", svg: "<polygon points='50,10 92,86 8,86' fill='#ffca28' stroke='#f9a825' stroke-width='4' stroke-linejoin='round'/><rect x='46' y='34' width='8' height='30' rx='4' fill='#5d4037'/><circle cx='50' cy='74' r='5' fill='#5d4037'/>" },
+  { name: "王冠", cat: "マーク", svg: "<path d='M14 74L10 30l22 18 18-28 18 28 22-18-4 44z' fill='#ffca28' stroke='#f9a825' stroke-width='3' stroke-linejoin='round'/><rect x='14' y='74' width='72' height='10' rx='3' fill='#f9a825'/><circle cx='50' cy='58' r='6' fill='#e53935'/>" },
+];
+
+/* 動きの例（JavaScript）。「動きの例」タブに表示され、「ここに挿入」で入れられます。
+   どれも <body> の中に入れれば動きます（同じ例は1回だけ入れる）。 */
+const JS_EXAMPLES = {
+  title: "動きの例（JavaScript）",
+  blocks: [
+    { type: "p", html: "入れたい場所（<code>&lt;body&gt;</code> の中）をクリックしてから「ここに挿入」を押します。入れたあとは、文や答えを<b>自分のテーマに合わせて書き換えよう</b>。" },
+    { type: "note", html: "<b>注意</b>：同じ例を2回入れると動かなくなります。2つ目をつくるときは、<code>id</code> や関数の名前（<code>quiz2</code> など）を変えよう。" },
+    { type: "h", text: "① 答えを見るクイズ" },
+    { type: "code", label: "ボタンを押すと答えが出る", code: `<p>Q. 〇〇は何でしょう？</p>
+<button onclick="showAnswer()">答えを見る</button>
+<p id="answer"></p>
+<script>
+function showAnswer() {
+  document.getElementById("answer").textContent = "A. ここに答えを書きます！";
+}
+<\/script>` },
+    { type: "h", text: "② 2択クイズ（正解・不正解）" },
+    { type: "code", label: "選んだボタンで結果が変わる", code: `<p>Q. 中学校の授業は1時間何分？</p>
+<button onclick="quiz2(true)">50分</button>
+<button onclick="quiz2(false)">45分</button>
+<p id="quiz2Result"></p>
+<script>
+function quiz2(ok) {
+  const r = document.getElementById("quiz2Result");
+  if (ok) {
+    r.textContent = "⭕ 正解！";
+    r.style.color = "green";
+  } else {
+    r.textContent = "❌ ざんねん！もう一度考えよう";
+    r.style.color = "red";
+  }
+}
+<\/script>` },
+    { type: "h", text: "③ くわしく見る（ひらく・とじる）" },
+    { type: "code", label: "ボタンで説明を出したり消したりする", code: `<button onclick="toggleMore()">くわしく見る</button>
+<div id="more" style="display: none;">
+  <p>ここに、くわしい説明を書きます。</p>
+</div>
+<script>
+function toggleMore() {
+  const box = document.getElementById("more");
+  if (box.style.display === "none") {
+    box.style.display = "block";
+  } else {
+    box.style.display = "none";
+  }
+}
+<\/script>` },
+    { type: "h", text: "④ いいねボタン（数がふえる）" },
+    { type: "code", label: "押した回数を数える", code: `<button onclick="addLike()">👍 いいね</button>
+<span id="likeCount">0</span>
+<script>
+let likes = 0;
+function addLike() {
+  likes = likes + 1;
+  document.getElementById("likeCount").textContent = likes;
+}
+<\/script>` },
+    { type: "h", text: "⑤ 背景の色を変える" },
+    { type: "code", label: "ボタンでページの色が変わる", code: `<p>ページの色を選んでね：
+  <button onclick="changeColor('#fff3e0')">オレンジ</button>
+  <button onclick="changeColor('#e3f2fd')">ブルー</button>
+  <button onclick="changeColor('#ffffff')">もとにもどす</button>
+</p>
+<script>
+function changeColor(c) {
+  document.body.style.backgroundColor = c;
+}
+<\/script>` },
+    { type: "h", text: "⑥ アドバイスくじ（ランダム）" },
+    { type: "code", label: "押すたびにちがう言葉が出る", code: `<button onclick="omikuji()">アドバイスをひく</button>
+<p id="omikujiResult"></p>
+<script>
+function omikuji() {
+  const list = [
+    "あいさつは元気よく！",
+    "提出物は早めに出そう",
+    "わからないことは先輩に聞こう",
+    "部活見学はいろいろ行ってみよう"
+  ];
+  const n = Math.floor(Math.random() * list.length);
+  document.getElementById("omikujiResult").textContent = list[n];
+}
+<\/script>` },
+    { type: "h", text: "⑦ 入力すると返事が出る" },
+    { type: "code", label: "見る人が入力した言葉を使う", code: `<p>あなたの好きな教科は？</p>
+<input id="subject" type="text">
+<button onclick="answerSubject()">送信</button>
+<p id="subjectMsg"></p>
+<script>
+function answerSubject() {
+  const s = document.getElementById("subject").value;
+  document.getElementById("subjectMsg").textContent = s + "が好きなんだね！中学校の" + s + "も楽しいよ！";
+}
+<\/script>` },
+    { type: "h", text: "⑧ 〇〇まであと何日（カウントダウン）" },
+    { type: "code", label: "今日の日付から計算する", code: `<p id="countdown"></p>
+<script>
+const goalDay = new Date("2027-04-06");  // 目標の日（例：入学式）
+const days = Math.ceil((goalDay - new Date()) / (1000 * 60 * 60 * 24));
+document.getElementById("countdown").textContent = "入学式まで あと " + days + " 日！";
+<\/script>` },
+    { type: "h", text: "⑨ 時間であいさつが変わる" },
+    { type: "code", label: "開いた時刻で言葉が変わる", code: `<p id="greeting"></p>
+<script>
+const hour = new Date().getHours();
+let msg = "こんばんは！";
+if (hour < 11) {
+  msg = "おはようございます！";
+} else if (hour < 17) {
+  msg = "こんにちは！";
+}
+document.getElementById("greeting").textContent = msg + "ようこそ、このページへ。";
+<\/script>` },
+  ],
+};
+
+/* みんなの作品（閲覧会）
+   先生が、このファイルと同じ場所に作品フォルダ（folder）をつくり、生徒の「3105.html」などを入れておくと、
+   「みんなの作品」タブで同じクラスの作品が一覧になります。 */
+const GALLERY = { folder: "works/", grade: 3, maxClass: 8, maxNo: 40 };
+
+/* 各回の説明
+   type: "h"（見出し） "p"（文） "list"（箇条書き） "code"（コード例・挿入ボタンつき）
+         "goal" "note" "end"（色つきの枠） "html"（表などをそのまま書く） */
+const LESSONS = [
+  {
+    tab: "第1回", title: "第1回　Webページのしくみとテーマ決め",
+    blocks: [
+      { type: "goal", html: "<b>めあて</b>：Webページが見えるしくみを知り、HTMLで見出しと文章を書く。" },
+      { type: "h", text: "Webページはどうやって見えている？" },
+      { type: "list", items: [
+        "Webページは <b>HTML</b> という「文字だけのファイル」でできています。",
+        "ファイルは <b>Webサーバー</b> に置かれていて、<b>ブラウザ</b>（Chromeなど）が受け取って、見た目に直して表示します。",
+        "HTMLは <b>タグ</b>（<code>&lt;h1&gt;</code> など）で「ここは見出し」「ここは文章」と意味をつけます。",
+      ] },
+      { type: "h", text: "やってみよう" },
+      { type: "list", ordered: true, items: [
+        "上の <b>出席番号</b> の欄に、番号を<b>4桁</b>で入れる（例：3年1組5番 → <b>3105</b>）。",
+        "「テーマの例」タブを参考に、自分のテーマを決める（<b>例にないテーマでもOK</b>。ほかの人と同じでもOK）。",
+        "コードの <code>〇〇</code> を自分のテーマに書き換える（<code>&lt;title&gt;</code> と <code>&lt;h1&gt;</code> の2か所）。",
+        "段落 <code>&lt;p&gt;</code> を増やして、文章を3つ以上書く。",
+      ] },
+      { type: "code", label: "段落を1つ追加する例", code: "<p>ここに文章を書きます。</p>" },
+      { type: "note", html: "<b>ポイント</b>：タグは <code>&lt;p&gt;</code> で始めて <code>&lt;/p&gt;</code> で終わります。「/」を忘れると表示がくずれます。" },
+      { type: "end", html: "<b>時間の終わりに</b>：「⬇ ダウンロード」を押し、Classroom の課題に提出する。" },
+    ],
+  },
+  {
+    tab: "第2回", title: "第2回　ページの組み立てと情報モラル",
+    blocks: [
+      { type: "goal", html: "<b>めあて</b>：読む人を考えてページを組み立て、小見出しや箇条書きで分かりやすくする。" },
+      { type: "h", text: "はじめに：前回の続きを開く" },
+      { type: "p", html: "「📂 読み込み」で前回ダウンロードしたファイルを開きます（同じ端末なら、自動で前回の続きが出ています）。" },
+      { type: "h", text: "Webで公開するときのルール" },
+      { type: "list", items: [
+        "<b>画像は「イラスト」タブのものだけ</b>：写真には人が写りこみやすく、ネットの画像には<b>著作権</b>があります。",
+        "<b>リンク先は、学校や国・市などの公式ページだけ</b>：知らないサイトにリンクしない。",
+        "<b>個人がわかる情報を書かない</b>：自分や友だちの名前、顔、住所など。",
+        "<b>人を悪く言わない</b>：先生・友だち・部活などを悪く書かない。",
+      ] },
+      { type: "h", text: "使えるタグ" },
+      { type: "code", label: "小見出し", code: "<h2>小見出しを書きます</h2>" },
+      { type: "code", label: "箇条書き（・が付きます）", code: "<ul>\n  <li>1つめ</li>\n  <li>2つめ</li>\n  <li>3つめ</li>\n</ul>" },
+      { type: "code", label: "番号付きの箇条書き", code: "<ol>\n  <li>はじめに</li>\n  <li>つぎに</li>\n  <li>さいごに</li>\n</ol>" },
+      { type: "code", label: "大事なところを太字にする", code: "<strong>大事なところ</strong>" },
+      { type: "h", text: "リンクをつける" },
+      { type: "p", html: "<b>リンク</b>は、クリックすると別の場所に移動できるしくみです。Webページどうしがリンクでつながっているので「Web（クモの巣）」と呼ばれます。" },
+      { type: "code", label: "① もくじ（同じページの中の小見出しへ移動）", code: "<p>もくじ：<a href=\"#part1\">〇〇とは</a>｜<a href=\"#part2\">〇〇のコツ</a></p>" },
+      { type: "code", label: "② 移動先の小見出しに id をつける", code: "<h2 id=\"part1\">〇〇とは</h2>" },
+      { type: "p", html: "<code>href=\"#part1\"</code> と <code>id=\"part1\"</code> の名前をそろえると、その場所へ移動します。" },
+      { type: "code", label: "③ ほかのWebページへのリンク（新しいタブで開く）", code: `<a href="${LINK_SAMPLE.url}" target="_blank">${LINK_SAMPLE.label}</a>` },
+      { type: "h", text: "やってみよう" },
+      { type: "list", ordered: true, items: [
+        "新1年生が知りたいことを3つ考え、それぞれを <code>&lt;h2&gt;</code> の小見出しにする。",
+        "小見出しの下に、文章か箇条書きで説明を書く。",
+        "ページの上のほうに「もくじ」をつくり、小見出しへのリンクをつける。",
+      ] },
+      { type: "note", html: "<b>ポイント</b>：コードを入れたい場所をクリックしてから「ここに挿入」を押すと、その場所に入ります。" },
+      { type: "end", html: "<b>時間の終わりに</b>：「⬇ ダウンロード」→ Classroom に提出（同じ課題に上書きでOK）。" },
+    ],
+  },
+  {
+    tab: "第3回", title: "第3回　CSSで見やすくする",
+    blocks: [
+      { type: "goal", html: "<b>めあて</b>：CSSで色や枠を指定し、読みやすく伝わりやすいページにする。" },
+      { type: "h", text: "CSSとは" },
+      { type: "p", html: "HTMLが「中身」、<b>CSS</b> は「見た目」を決めます。コードの上のほうにある <code>&lt;style&gt;</code> 〜 <code>&lt;/style&gt;</code> の中に書きます。" },
+      { type: "code", label: "書き方のきまり", code: "h2 {\n  color: #c0392b;\n}", noInsert: true },
+      { type: "p", html: "「どこを（h2）」「何を（color）」「どうする（#c0392b）」の順に書きます。最後の <code>;</code> を忘れずに。" },
+      { type: "h", text: "使えるCSS（&lt;style&gt; の中に挿入）" },
+      { type: "code", label: "小見出しに色と下線をつける", code: "h2 {\n  color: #c0392b;\n  border-bottom: 3px solid #c0392b;\n  padding-bottom: 4px;\n}" },
+      { type: "code", label: "ページの背景に色をつける", code: "body {\n  background-color: #fdf6e3;\n}" },
+      { type: "code", label: "箇条書きを枠で囲む", code: "ul {\n  background-color: #ffffff;\n  border: 2px solid #f0b400;\n  border-radius: 10px;\n  padding: 10px 30px;\n}" },
+      { type: "html", html: `<table class="tbl">
+        <tr><th>色の書き方</th><th>例</th></tr>
+        <tr><td>英語の名前</td><td><code>red</code> <code>navy</code> <code>orange</code></td></tr>
+        <tr><td>カラーコード</td><td><code>#c0392b</code>（赤） <code>#1a5fb4</code>（青） <code>#2e7d32</code>（緑）</td></tr>
+      </table>` },
+      { type: "note", html: "<b>見やすさのコツ</b>：使う色は3色くらいまで。背景がうすい色なら文字はこい色に。" },
+      { type: "h", text: "イラストを入れる" },
+      { type: "p", html: "入れたい場所をクリックしてから、<b>「イラスト」タブ</b>で「ここに挿入」を押します。次のようなタグが入ります。" },
+      { type: "code", label: "画像のタグ（しくみ）", code: "<img src=\"（画像のデータ）\" alt=\"学校\" width=\"120\">", noInsert: true },
+      { type: "list", items: [
+        "<code>src</code>：画像のデータ。とても長い文字が入りますが、<b>消したり書き換えたりしない</b>。",
+        "<code>alt</code>：画像の説明。目の不自由な人の読み上げや、画像が出ないときに使われます。",
+        "<code>width</code>：画像の横幅。数字を変えると大きさが変わります。",
+      ] },
+      { type: "code", label: "イラストを右に寄せて、文章を横に回りこませるCSS", code: "img {\n  float: right;\n  margin-left: 10px;\n}" },
+      { type: "end", html: "<b>時間の終わりに</b>：「⬇ ダウンロード」→ Classroom に提出。" },
+    ],
+  },
+  {
+    tab: "第4回", title: "第4回　ボタンで動きをつける（JavaScript）",
+    blocks: [
+      { type: "goal", html: "<b>めあて</b>：JavaScriptで、見る人の操作に反応するしくみ（双方向性）をつくる。" },
+      { type: "h", text: "JavaScriptとは" },
+      { type: "p", html: "HTMLが「中身」、CSSが「見た目」、<b>JavaScript</b> は「動き」を担当します。ボタンを押したら答えが出る「クイズ」をつくってみましょう。" },
+      { type: "h", text: "① クイズの部分（&lt;body&gt; の中に挿入）" },
+      { type: "code", label: "クイズのHTML", code: "<h2>クイズ</h2>\n<p>Q. 〇〇は何でしょう？</p>\n<button onclick=\"showAnswer()\">答えを見る</button>\n<p id=\"answer\"></p>" },
+      { type: "h", text: "② 動きの部分（&lt;/body&gt; のすぐ上に挿入）" },
+      { type: "code", label: "クイズのJavaScript", code: "<script>\nfunction showAnswer() {\n  document.getElementById(\"answer\").textContent = \"A. ここに答えを書きます！\";\n}\n<\/script>" },
+      { type: "list", items: [
+        "<code>onclick=\"showAnswer()\"</code>：ボタンを押したら <code>showAnswer</code> を動かす。",
+        "<code>getElementById(\"answer\")</code>：<code>id=\"answer\"</code> の場所を探す。",
+        "<code>textContent = \"…\"</code>：その場所の文字を書き換える。",
+      ] },
+      { type: "h", text: "チャレンジ" },
+      { type: "p", html: "<b>「動きの例」タブ</b>に、2択クイズ・くわしく見る・いいねボタン・くじ・カウントダウンなど9種類の例があります。自分のページに合うものを入れてみよう。" },
+      { type: "list", items: [
+        "クイズの問題と答えを、自分のテーマに合わせて書き換える。",
+        "2問目をつくる（<code>id</code> と関数名を <code>answer2</code>・<code>showAnswer2</code> のように変える）。",
+      ] },
+      { type: "note", html: "<b>動かないとき</b>：<code>id</code> の名前が2か所で同じか、<code>\"</code> や <code>)</code> が抜けていないかを確認しよう。" },
+      { type: "end", html: "<b>時間の終わりに</b>：「チェック表」タブで確認 →「⬇ ダウンロード」→ Classroom に提出。" },
+    ],
+  },
+  {
+    tab: "第5回", title: "第5回　閲覧会とふり返り",
+    blocks: [
+      { type: "goal", html: "<b>めあて</b>：おたがいの作品を見て良いところを伝え合い、学んだことをふり返る。" },
+      { type: "h", text: "閲覧会の前に（10分）" },
+      { type: "list", ordered: true, items: [
+        "「チェック表」タブで、✔ がついていない項目を仕上げる。",
+        "最終版を「⬇ ダウンロード」→ Classroom に提出する。",
+      ] },
+      { type: "h", text: "閲覧会（みんなの作品を見る）" },
+      { type: "list", ordered: true, items: [
+        "<b>「みんなの作品」タブ</b>を開き、自分のクラスを選んで「作品を表示」を押す。",
+        "番号を押すと、作品が大きく表示される。「次へ ▶」で順番に見ていこう。",
+        "見た作品には ✔ がつく。できるだけたくさん見よう。",
+      ] },
+      { type: "p", html: "見る観点：<b>新1年生に伝わるか</b>／<b>見やすい工夫</b>／<b>クイズなどの動き</b>" },
+      { type: "h", text: "ふり返り" },
+      { type: "p", html: "Classroom の<b>「ふり返りフォーム」</b>に答えます。閲覧会で見た友だちの作品の良かったところも書くので、見ながらメモしておこう。" },
+      { type: "list", items: [
+        "自分のページで工夫したところはどこか。",
+        "HTML・CSS・JavaScriptは、それぞれ何を担当していたか。",
+        "身のまわりのWebページやアプリにも、同じしくみが使われているところはあるか。",
+      ] },
+      { type: "end", html: "<b>おつかれさまでした！</b> 卒業後も、ここで学んだことは身のまわりの情報の技術を見る目につながります。" },
+    ],
+  },
+];
+
+/* =================================================================
+   ここから下はプログラム本体（ふだんは変更不要）
+   ================================================================= */
+
+const $ = (id) => document.getElementById(id);
+const editor = $("editor");
+const preview = $("preview");
+const guideBody = $("guideBody");
+let currentTab = 0;
+
+/* ---------- 保存（ブラウザ内） ---------- */
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveState() {
+  const state = { code: editor.value, no: $("studentNo").value, tab: currentTab, savedAt: Date.now() };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const t = new Date();
+    $("saveState").textContent = "自動保存しました " + t.getHours() + ":" + String(t.getMinutes()).padStart(2, "0");
+  } catch (e) {
+    $("saveState").textContent = "⚠ 自動保存できません。こまめにダウンロードしてください";
+  }
+}
+
+/* ---------- プレビュー ---------- */
+let timer = null;
+/* プレビュー内のリンク対策（プレビューのときだけ付け足す。ダウンロードするファイルには入らない）
+   ・ページ内リンク（#〜）：その場所までスクロールする
+   ・ほかのページへのリンク：新しいタブで開く */
+const PREVIEW_HELPER = "<script>document.addEventListener('click',function(e){" +
+  "var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');" +
+  "if(h.charAt(0)==='#'){e.preventDefault();var t=document.getElementById(decodeURIComponent(h.slice(1)));if(t)t.scrollIntoView({behavior:'smooth'});}" +
+  "else{a.target='_blank';}});<\/script>";
+function previewDoc() { return editor.value + PREVIEW_HELPER; }
+function updatePreview() {
+  preview.srcdoc = previewDoc();
+  if (currentTab === CHECK_TAB) renderChecks();
+}
+function onEdit() {
+  clearTimeout(timer);
+  timer = setTimeout(() => { updatePreview(); saveState(); commitHistory(); }, 500);
+}
+
+/* ---------- 文字の安全な表示 ---------- */
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* ---------- カーソル位置に挿入 ---------- */
+let lastCursor = null;
+editor.addEventListener("blur", () => { lastCursor = [editor.selectionStart, editor.selectionEnd]; });
+function insertCode(code) {
+  const [s, e] = lastCursor || [editor.selectionStart, editor.selectionEnd];
+  commitHistory();
+  editor.focus();
+  editor.setSelectionRange(s, e);
+  // 複数行のコードは前後で改行して、行の途中に入らないようにする
+  if (code.includes("\n")) {
+    if (s > 0 && editor.value[s - 1] !== "\n") code = "\n" + code;
+    if (editor.value[e] !== "\n") code = code + "\n";
+  }
+  editor.setRangeText(code, s, e, "end");
+  lastCursor = null;
+  onEdit();
+  toast("コードを挿入しました");
+}
+
+/* ---------- タブ ---------- */
+/* 先生用タブは URL に ?teacher をつけたときだけ表示 */
+const TEACHER_MODE = (() => { try { return new URLSearchParams(location.search).has("teacher"); } catch (e) { return false; } })();
+const THEME_TAB = LESSONS.length;
+const ICON_TAB = LESSONS.length + 1;
+const JS_TAB = LESSONS.length + 2;
+const CHECK_TAB = LESSONS.length + 3;
+const GALLERY_TAB = LESSONS.length + 4;
+const TEACHER_TAB = TEACHER_MODE ? LESSONS.length + 5 : -1;
+const tabNames = [...LESSONS.map(l => l.tab), "テーマの例", "イラスト", "動きの例", "チェック表", "みんなの作品"].concat(TEACHER_MODE ? ["先生用"] : []);
+
+function renderTabs() {
+  const nav = $("tabs");
+  nav.innerHTML = "";
+  tabNames.forEach((name, i) => {
+    if (i === TEACHER_TAB) { const sp = document.createElement("span"); sp.className = "spacer"; nav.appendChild(sp); }
+    const b = document.createElement("button");
+    b.textContent = name;
+    if (i === currentTab) b.className = "active";
+    b.onclick = () => { currentTab = i; renderTabs(); renderGuide(); showGuide(true); saveState(); };
+    nav.appendChild(b);
+  });
+  if (TEACHER_TAB < 0) { const sp = document.createElement("span"); sp.className = "spacer"; nav.appendChild(sp); }
+  const r = document.createElement("button");
+  r.className = "layout-reset";
+  r.textContent = "↔ 画面の幅をもとに戻す";
+  r.title = "説明・コード・プレビューの幅を最初の状態に戻します";
+  r.onclick = resetLayout;
+  nav.appendChild(r);
+}
+
+function renderGuide() {
+  guideBody.scrollTop = 0;
+  if (currentTab < LESSONS.length) renderLesson(LESSONS[currentTab]);
+  else if (currentTab === THEME_TAB) renderThemes();
+  else if (currentTab === ICON_TAB) renderIcons();
+  else if (currentTab === JS_TAB) renderLesson(JS_EXAMPLES);
+  else if (currentTab === CHECK_TAB) renderChecks();
+  else if (currentTab === GALLERY_TAB) renderGallery();
+  else renderTeacher();
+  $("guide").scrollTop = 0;
+}
+
+function renderLesson(lesson) {
+  let html = `<h2>${lesson.title}</h2>`;
+  const codes = [];
+  for (const b of lesson.blocks) {
+    if (b.type === "h") html += `<h3>${b.text}</h3>`;
+    else if (b.type === "p") html += `<p>${b.html}</p>`;
+    else if (b.type === "list") {
+      const tag = b.ordered ? "ol" : "ul";
+      html += `<${tag}>${b.items.map(x => `<li>${x}</li>`).join("")}</${tag}>`;
+    }
+    else if (b.type === "code") {
+      const idx = codes.push(b.code) - 1;
+      html += `<div class="codebox"><div class="cb-bar"><span>${esc(b.label)}</span>` +
+        (b.noInsert ? "" : `<button class="mini" data-code="${idx}">ここに挿入</button>`) +
+        `</div><pre>${esc(b.code)}</pre></div>`;
+    }
+    else if (b.type === "html") html += b.html;
+    else html += `<p class="${b.type}">${b.html}</p>`;
+  }
+  guideBody.innerHTML = html;
+  guideBody.querySelectorAll("[data-code]").forEach(btn => {
+    btn.addEventListener("mousedown", (e) => e.preventDefault()); // エディタのカーソル位置を保つ
+    btn.onclick = () => insertCode(codes[Number(btn.dataset.code)]);
+  });
+}
+
+function renderThemes() {
+  let html = `<h2>テーマの例</h2>
+    <p>新1年生に向けて「これを知っておくと安心！」「中学校って楽しそう！」と思えることを伝えるページをつくります。</p>
+    <p class="goal">下にあるのは<b>あくまで例</b>です。<b>ここにないテーマでもOK</b>。新1年生に伝えたいことなら、自由に決めてかまいません。</p>
+    <p class="note">ほかの人と同じテーマでもOK。<b>自分の体験や工夫</b>を入れて、自分だけのページにしよう。</p>`;
+  for (const t of THEMES) {
+    html += `<h3>${esc(t.cat)}</h3><ul>${t.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  }
+  guideBody.innerHTML = html;
+}
+
+function iconSrc(icon) {
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" + icon.svg + "</svg>";
+  return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+}
+function renderIcons() {
+  let cards = "";
+  const cats = ICON_CATS.concat([...new Set(ICONS.map(ic => ic.cat))].filter(c => !ICON_CATS.includes(c)));
+  cats.forEach(cat => {
+    const list = ICONS.map((ic, i) => [ic, i]).filter(([ic]) => (ic.cat || "その他") === cat);
+    if (!list.length) return;
+    cards += `<h3>${esc(cat)}</h3><div class="icon-grid">`;
+    list.forEach(([ic, i]) => {
+      cards += `<div class="icon-card"><img src="${iconSrc(ic)}" alt="${esc(ic.name)}"><div>${esc(ic.name)}</div>` +
+        `<button class="mini" data-icon="${i}">ここに挿入</button></div>`;
+    });
+    cards += `</div>`;
+  });
+  guideBody.innerHTML = `<h2>イラスト</h2>
+    <p>コードの入れたい場所をクリックしてから「ここに挿入」を押します。</p>
+    <p class="note">ここにあるイラストは、この教材のためにつくったものなので、自由に使えます。<b>写真やネットの画像は使いません。</b></p>
+    ${cards}
+    <p>大きさは <code>width="120"</code> の数字で変えられます。くわしくは「第3回」タブを見よう。</p>`;
+  guideBody.querySelectorAll("[data-icon]").forEach(btn => {
+    btn.addEventListener("mousedown", (e) => e.preventDefault());
+    btn.onclick = () => {
+      const ic = ICONS[Number(btn.dataset.icon)];
+      insertCode(`<img src="${iconSrc(ic)}" alt="${ic.name}" width="120">`);
+    };
+  });
+}
+
+function renderChecks() {
+  let doc;
+  try { doc = new DOMParser().parseFromString(editor.value, "text/html"); }
+  catch (e) { doc = document.implementation.createHTMLDocument(""); }
+  let okCount = 0, autoCount = 0;
+  let rows = "";
+  for (const c of CHECKS) {
+    if (c.auto === false) {
+      rows += `<div class="check"><span class="mark">□</span><div>${esc(c.label)}<small>第${c.lesson}回・${esc(c.hint)}</small></div></div>`;
+      continue;
+    }
+    autoCount++;
+    let ok = false;
+    try { ok = c.test(doc, editor.value); } catch (e) { ok = false; }
+    if (ok) okCount++;
+    rows += `<div class="check ${ok ? "ok" : "ng"}"><span class="mark">${ok ? "✔" : "−"}</span><div>${esc(c.label)}<small>第${c.lesson}回・${esc(c.hint)}</small></div></div>`;
+  }
+  guideBody.innerHTML = `<h2>チェック表</h2>
+    <p class="goal">自動チェック：<b>${okCount} / ${autoCount}</b> 項目　（コードを書きかえると自動で更新されます）</p>
+    ${rows}
+    <p style="margin-top:12px">□ の項目は、自分で確認しよう。</p>
+    <p class="end">出席番号：<b>${esc($("studentNo").value || "（未入力）")}</b></p>`;
+}
+
+function renderTeacher() {
+  guideBody.innerHTML = `<h2>先生用メモ</h2>
+  <p class="note">このタブは、URLの最後に <code>?teacher</code> をつけて開いたときだけ表示されます（生徒用のURLには出ません）。</p>
+  <h3>授業前の準備（1回だけ）</h3>
+  <ol>
+    <li>このファイルを gijutsu-lab にアップロードし、URLを Classroom に掲示する。</li>
+    <li>Classroom に課題を<b>1つだけ</b>作る（例：「Webページ制作　提出先」）。<br>
+      説明文の例：「毎時間の終わりに ⬇ ダウンロードしたファイル（例：3105.html）を提出してください。2回目以降は前のファイルを削除して、新しいファイルを提出してください。」</li>
+    <li>第5回用に「ふり返りフォーム」（Googleフォーム）を1つ作り、Classroom に掲示する。HTML・CSS・JavaScriptの役割の問題はテスト（自動採点）にしておくと、知識の評価がそのまま集計される。</li>
+  </ol>
+  <h3>毎時間の流れ</h3>
+  <ol>
+    <li>はじめ：URLを開く（同じ端末なら前回の続きが自動で出る。出ないときは「📂 読み込み」）。</li>
+    <li>その回のタブの説明を見ながら作業。</li>
+    <li>終わり：「⬇ ダウンロード」→ Classroom に提出。</li>
+  </ol>
+  <h3>閲覧会（第5回）の準備</h3>
+  <ol>
+    <li>Classroom の提出先の課題から「Google ドライブのフォルダ」を開き、全員のファイルを選んでダウンロードする（zipになるので展開する）。</li>
+    <li>ファイル名が「3105.html」のような4桁になっているか確認する（「3105 (1).html」などは名前を直す）。</li>
+    <li>展開したファイルを <b>works</b> という名前のフォルダに入れ、GitHub の、このファイルと同じ場所の「Add file → Upload files」に<b>フォルダごとドラッグ</b>してアップロードする。</li>
+    <li>生徒は「みんなの作品」タブでクラスを選ぶと、同じクラスの作品を一覧で見られる。</li>
+  </ol>
+  <p class="note"><b>注意</b>：GitHub Pages に置いた作品は、URLを知っていれば<b>学校の外からも見られます</b>。アップロード前に、名前や個人がわかる情報がないかを「みんなの作品」で確認し、閲覧会が終わったら works フォルダを削除してください。</p>
+  <h3>採点のしかた</h3>
+  <ol>
+    <li>Classroom から生徒のファイルをダウンロードする。</li>
+    <li>このページの「📂 読み込み」で開くと、プレビューと「チェック表」の自動判定が表示される。</li>
+    <li>閲覧会のために works フォルダへアップロードした後なら、「みんなの作品」タブで全員分を次々に見ることもできる。</li>
+  </ol>
+  <p class="note">先生の端末で読み込むと、先生の端末のブラウザ内の保存が上書きされます（生徒の提出ファイルには影響しません）。</p>
+  <table class="tbl">
+    <tr><th>観点</th><th>見るところ</th></tr>
+    <tr><td>知識・技能</td><td>チェック表の自動判定（HTML・CSS・JavaScriptを使えているか）</td></tr>
+    <tr><td>思考・判断・表現</td><td>新1年生に伝わる構成・見やすさの工夫（第5回ふり返り）</td></tr>
+    <tr><td>主体的に学習に取り組む態度</td><td>毎時間の提出、チャレンジ課題、ふり返りの記述</td></tr>
+  </table>
+  <h3>メンテナンス（担当者が変わったとき）</h3>
+  <ul>
+    <li>このファイル1つで動きます。外部サービスやログインは使っていません。</li>
+    <li>説明文・テーマ・チェック項目は、ファイル内の <code>LESSONS</code>・<code>THEMES</code>・<code>CHECKS</code> を書き換えるだけで変更できます（ファイル冒頭のコメントに場所の説明があります）。</li>
+    <li>自動保存はその端末のブラウザ内だけです。端末が変わったり、閲覧履歴を消したりすると消えるので、提出ファイルが正式なバックアップです。</li>
+  </ul>`;
+}
+
+/* ---------- 画面の幅の調整（つまみをドラッグ） ---------- */
+const LAYOUT_KEY = STORAGE_KEY + "_layout";
+const DEFAULT_LAYOUT = { gw: 36, ew: 32 };   // ％（説明欄・コード欄）
+const MIN_W = 15;                            // どの欄もこれ（％）より狭くしない
+let layout = { ...DEFAULT_LAYOUT };
+function applyLayout() {
+  $("main").style.setProperty("--gw", layout.gw + "%");
+  $("main").style.setProperty("--ew", layout.ew + "%");
+}
+function saveLayout() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (e) {} }
+function loadLayout() {
+  try {
+    const l = JSON.parse(localStorage.getItem(LAYOUT_KEY));
+    if (l && l.gw >= MIN_W && l.ew >= MIN_W && l.gw + l.ew <= 100 - MIN_W) layout = l;
+  } catch (e) {}
+  applyLayout();
+}
+function resetLayout() { layout = { ...DEFAULT_LAYOUT }; applyLayout(); saveLayout(); toast("画面の幅をもとに戻しました"); }
+function setupSplitter(el, which) {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    el.classList.add("active");
+    document.body.classList.add("dragging");
+    const rect = $("main").getBoundingClientRect();
+    const guideShown = !$("main").classList.contains("guide-hidden");
+    const move = (ev) => {
+      const x = (ev.clientX - rect.left) / rect.width * 100;   // 左端からの位置（％）
+      if (which === "guide") {
+        layout.gw = Math.max(MIN_W, Math.min(x, 100 - layout.ew - MIN_W));
+      } else {
+        const start = guideShown ? layout.gw : 0;
+        layout.ew = Math.max(MIN_W, Math.min(x - start, 100 - start - MIN_W));
+      }
+      applyLayout();
+    };
+    const up = () => {
+      el.classList.remove("active");
+      document.body.classList.remove("dragging");
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      saveLayout();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  });
+  el.addEventListener("dblclick", resetLayout);
+}
+setupSplitter($("split1"), "guide");
+setupSplitter($("split2"), "editor");
+
+/* ---------- 説明欄の表示・非表示 ---------- */
+function showGuide(show) {
+  $("main").classList.toggle("guide-hidden", !show);
+  $("btnShowGuide").style.display = show ? "none" : "";
+}
+$("btnHideGuide").onclick = () => showGuide(false);
+$("btnShowGuide").onclick = () => showGuide(true);
+
+/* ---------- ダウンロード ---------- */
+/* 出席番号は4桁の数字（例：3年1組5番 → 3105）。全角数字も半角に直す */
+function cleanNo(s) {
+  return s.trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
+}
+$("btnDownload").onclick = () => {
+  const no = cleanNo($("studentNo").value);
+  if (!/^[0-9]{4}$/.test(no)) {
+    toast("出席番号を4桁の数字で入れてください（例：3年1組5番 → 3105）");
+    $("studentNo").focus();
+    return;
+  }
+  const blob = new Blob([editor.value], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = no + ".html";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast("「" + no + ".html」をダウンロードしました。Classroomに提出しよう");
+};
+
+/* ---------- 読み込み ---------- */
+$("btnLoad").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (editor.value.trim() !== "" && editor.value !== STARTER &&
+      !confirm("今のコードを「" + file.name + "」の内容に置きかえます。よろしいですか？")) {
+    e.target.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    commitHistory();
+    editor.value = String(reader.result);
+    commitHistory();
+    const base = file.name.replace(/\.html?$/i, "");
+    if (/^[0-9]{4}$/.test(base)) $("studentNo").value = base;
+    updatePreview();
+    saveState();
+    toast("「" + file.name + "」を読み込みました");
+  };
+  reader.readAsText(file, "UTF-8");
+  e.target.value = "";
+};
+
+/* ---------- やり直し ---------- */
+$("btnReset").onclick = () => {
+  if (!confirm("コードを最初の状態に戻します。今のコードは消えます。\n（必要なら先にダウンロードしておきましょう）\nよろしいですか？")) return;
+  commitHistory();
+  editor.value = STARTER;
+  commitHistory();
+  updatePreview();
+  saveState();
+};
+
+/* ---------- 大きく表示（閲覧会用） ---------- */
+$("btnFull").onclick = () => {
+  $("previewFull").srcdoc = previewDoc();
+  const no = $("studentNo").value.trim();
+  $("ovTitle").textContent = no ? "出席番号 " + no + " の作品" : "作品を大きく表示中";
+  $("btnPrevWork").style.display = "none";
+  $("btnNextWork").style.display = "none";
+  $("overlay").classList.add("show");
+};
+$("btnCloseFull").onclick = () => {
+  $("overlay").classList.remove("show");
+  $("previewFull").srcdoc = "";
+  if (currentTab === GALLERY_TAB) showGalleryList();   // 「見た」の印を更新
+};
+/* ---------- みんなの作品（閲覧会） ---------- */
+const SEEN_KEY = STORAGE_KEY + "_seen";
+let galleryWorks = [];
+let galleryIdx = -1;
+let galleryClass = "";
+function loadSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; } catch (e) { return {}; } }
+function markSeen(no) { const s = loadSeen(); s[no] = 1; try { localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch (e) {} }
+
+function renderGallery() {
+  const myNo = cleanNo($("studentNo").value);
+  if (!galleryClass) galleryClass = /^[0-9]{4}$/.test(myNo) ? myNo.charAt(1) : "1";
+  let opts = "";
+  for (let c = 1; c <= GALLERY.maxClass; c++) opts += `<option value="${c}"${String(c) === galleryClass ? " selected" : ""}>${c}組</option>`;
+  guideBody.innerHTML = `<h2>みんなの作品</h2>
+    <p>閲覧会の日に、先生がみんなの作品を公開します。クラスを選んで「作品を表示」を押そう。</p>
+    <div class="gallery-ctrl">${GALLERY.grade}年 <select id="galleryClass">${opts}</select>
+      <button class="go" id="btnGallery">作品を表示</button></div>
+    <div id="galleryList"></div>
+    <p class="note">友だちの作品は見るだけです。番号を押すと大きく表示され、「次へ ▶」で順番に見られます。</p>`;
+  $("galleryClass").onchange = (e) => { galleryClass = e.target.value; };
+  $("btnGallery").onclick = () => loadGallery(galleryClass);
+  if (galleryWorks.length && galleryWorks[0].no.charAt(1) === galleryClass) showGalleryList();
+}
+
+async function loadGallery(cls) {
+  const box = $("galleryList");
+  if (location.protocol === "file:") {
+    box.innerHTML = `<p class="note">この機能は、インターネット上（GitHub Pages）のURLで開いたときだけ使えます。</p>`;
+    return;
+  }
+  box.innerHTML = "<p>読みこみ中…</p>";
+  const nos = [];
+  for (let n = 1; n <= GALLERY.maxNo; n++) nos.push(String(GALLERY.grade) + cls + String(n).padStart(2, "0"));
+  const results = await Promise.all(nos.map(async (no) => {
+    try {
+      const r = await fetch(GALLERY.folder + no + ".html", { cache: "no-cache" });
+      if (!r.ok) return null;
+      const html = await r.text();
+      const d = new DOMParser().parseFromString(html, "text/html");
+      const title = (d.title || (d.querySelector("h1") || {}).textContent || "").trim();
+      return { no, html, title };
+    } catch (e) { return null; }
+  }));
+  galleryWorks = results.filter(Boolean);
+  showGalleryList();
+}
+
+function showGalleryList() {
+  const box = $("galleryList");
+  if (!box) return;
+  if (!galleryWorks.length) {
+    box.innerHTML = `<p class="note">まだ作品がありません。先生が公開するまで待とう。</p>`;
+    return;
+  }
+  const seen = loadSeen();
+  const myNo = cleanNo($("studentNo").value);
+  const cards = galleryWorks.map((w, i) =>
+    `<button class="work-card${seen[w.no] ? " seen" : ""}${w.no === myNo ? " mine" : ""}" data-work="${i}">` +
+    `<span class="wno">${esc(w.no)}${w.no === myNo ? "（自分）" : ""}</span><span class="wtitle">${esc(w.title || "（タイトルなし）")}</span></button>`).join("");
+  const seenCount = galleryWorks.filter(w => seen[w.no]).length;
+  box.innerHTML = `<p class="goal">${galleryWorks.length}作品　／　見た作品：<b>${seenCount}</b></p><div class="work-grid">${cards}</div>`;
+  box.querySelectorAll("[data-work]").forEach(b => b.onclick = () => openWork(Number(b.dataset.work)));
+}
+
+function openWork(i) {
+  if (i < 0 || i >= galleryWorks.length) return;
+  galleryIdx = i;
+  const w = galleryWorks[i];
+  $("previewFull").srcdoc = w.html + PREVIEW_HELPER;
+  $("ovTitle").textContent = `出席番号 ${w.no} の作品（${i + 1} / ${galleryWorks.length}）`;
+  $("btnPrevWork").style.display = "";
+  $("btnNextWork").style.display = "";
+  $("btnPrevWork").disabled = i === 0;
+  $("btnNextWork").disabled = i === galleryWorks.length - 1;
+  $("overlay").classList.add("show");
+  markSeen(w.no);
+}
+$("btnPrevWork").onclick = () => openWork(galleryIdx - 1);
+$("btnNextWork").onclick = () => openWork(galleryIdx + 1);
+
+
+/* ---------- 戻る・進む（変更の履歴） ----------
+   入力が0.5秒止まるごと、またはコードの挿入・読み込み・やり直しのたびに記録します。 */
+const HISTORY_MAX = 200;
+let histStack = [];
+let histIdx = -1;
+function commitHistory() {
+  if (histStack[histIdx] === editor.value) return;
+  histStack = histStack.slice(0, histIdx + 1);
+  histStack.push(editor.value);
+  if (histStack.length > HISTORY_MAX) histStack.shift();
+  histIdx = histStack.length - 1;
+  updateHistoryButtons();
+}
+function moveHistory(step) {
+  clearTimeout(timer);
+  commitHistory();                       // 打ちかけの文字も先に記録する
+  const next = histIdx + step;
+  if (next < 0 || next >= histStack.length) return;
+  const pos = editor.selectionStart;
+  histIdx = next;
+  editor.value = histStack[histIdx];
+  editor.focus();
+  editor.setSelectionRange(Math.min(pos, editor.value.length), Math.min(pos, editor.value.length));
+  updatePreview();
+  saveState();
+  updateHistoryButtons();
+}
+function updateHistoryButtons() {
+  $("btnUndo").disabled = histIdx <= 0 && histStack[histIdx] === editor.value;
+  $("btnRedo").disabled = histIdx >= histStack.length - 1;
+}
+$("btnUndo").addEventListener("mousedown", (e) => e.preventDefault());
+$("btnRedo").addEventListener("mousedown", (e) => e.preventDefault());
+$("btnUndo").onclick = () => moveHistory(-1);
+$("btnRedo").onclick = () => moveHistory(1);
+editor.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); moveHistory(-1); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); moveHistory(1); }
+});
+editor.addEventListener("input", () => { $("btnUndo").disabled = false; });
+
+/* ---------- Tabキーでスペースを入れる ---------- */
+editor.addEventListener("keydown", (e) => {
+  if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    editor.setRangeText("  ", editor.selectionStart, editor.selectionEnd, "end");
+    onEdit();
+  }
+});
+editor.addEventListener("input", onEdit);
+$("studentNo").addEventListener("change", () => { $("studentNo").value = cleanNo($("studentNo").value); saveState(); });
+$("studentNo").addEventListener("input", () => { saveState(); if (currentTab === CHECK_TAB) renderChecks(); });
+
+/* ---------- お知らせ ---------- */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = "none"; }, 2500);
+}
+
+/* ---------- 起動 ---------- */
+(function init() {
+  const st = loadState();
+  editor.value = typeof st.code === "string" && st.code.trim() !== "" ? st.code : STARTER;
+  $("studentNo").value = /^[0-9]{4}$/.test(st.no || "") ? st.no : "";
+  currentTab = Number.isInteger(st.tab) && st.tab >= 0 && st.tab < tabNames.length ? st.tab : 0;
+  if (currentTab === TEACHER_TAB && !TEACHER_MODE) currentTab = 0;
+  commitHistory();
+  loadLayout();
+  renderTabs();
+  renderGuide();
+  updatePreview();
+  if (st.savedAt) $("saveState").textContent = "前回の続きを開きました";
+})();
+</script>
+</body>
+</html>
